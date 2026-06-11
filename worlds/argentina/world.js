@@ -1,17 +1,18 @@
 /* ============================================================
-   ARGENTINA WORLD — Northwest pampas: red dirt road, cardón cacti,
-   Jujuy colored hills, empanada/dulce crates, distant Obelisco.
-   3-lane endless runner playfield. Forward = +Z (into screen).
-   window.buildWorld1(THREE, scene) -> {
+   ARGENTINA WORLD PACK — Northwest pampas: red dirt road, cardón
+   cacti, Jujuy colored hills, empanada/dulce crates, distant
+   Obelisco. Consumed by shared/runner.js via window.ARGENTINA_PACK.
+   Forward = +Z (into screen).
+   buildWorld(THREE, scene) -> {
      laneX, FAR, BEHIND, SPAN, scrollers:[{group,far?}],
-     makeCrate(), makeCactus(), makeMango()
+     make:{cactus,crate,basic,tnt,aku}, makeCollectible, makeShieldIcon
    }
    ============================================================ */
-window.buildWorld1 = function (THREE, scene) {
-  const mat = (color, o = {}) =>
-    new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: true, roughness: 0.88, metalness: 0.03 }, o));
-  const emis = (color, i = 1) =>
-    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: i, flatShading: true, roughness: 0.5 });
+(function () {
+function buildWorld(THREE, scene) {
+  const H = window.matHelpers(THREE);
+  const mat = (color, o = {}) => H.mat(color, Object.assign({ roughness: 0.88, metalness: 0.03 }, o));
+  const emis = H.emis;
 
   /* ---- palette ---- */
   const C = {
@@ -403,8 +404,37 @@ window.buildWorld1 = function (THREE, scene) {
   }
 
   return {
-    root, laneX, ROAD_HALF, FAR, BEHIND, SPAN,
-    scrollers, makeCrate, makeCactus, makeMango,
-    makeBasicCrate, makeTNT, makeAkuCrate, makeAkuMask,
+    root, laneX, ROAD_HALF, FAR, BEHIND, SPAN, scrollers,
+    make: { cactus: makeCactus, crate: makeCrate, basic: makeBasicCrate, tnt: makeTNT, aku: makeAkuCrate },
+    makeCollectible: makeMango,
+    makeShieldIcon: makeAkuMask,
   };
+}
+
+/* ---- the pack consumed by shared/runner.js ---- */
+window.ARGENTINA_PACK = {
+  id: "argentina",
+  title: "Argentina",
+  subtitle: "Scene 1 · Endless Pampas Run",
+  startTitle: "Argentina Run",
+  startDesc: "Three lanes of red pampas dirt. Score <b>500 points</b> to clear the level!<br>Jump cacti, smash crates, dodge TNT, grab Aku Aku masks.",
+  bestKey: "arg_run_best_v1",
+  winScore: 500,
+  collectible: { name: "MANGO", points: 5 },
+  buildWorld,
+  /* obstacle behaviors:
+     kind: deadly (shieldable death) | smash (points) | shield (grants Aku point)
+     clearAt: absolute jump height that vaults it · clearMargin: relative to mesh topY
+     deathCopy: custom game-over card text */
+  obstacles: {
+    cactus: { kind: "deadly", clearMargin: -0.4 },
+    tnt:    { kind: "deadly", clearMargin: -0.4, deathCopy: { ey: "KA-BOOM!", title: "GO HOME!" } },
+    crate:  { kind: "smash", points: 25, pop: "SMASH! +25", drops: 1, clearAt: 1.1 },
+    basic:  { kind: "smash", points: 10, pop: "+10", clearMargin: 0.3 },
+    aku:    { kind: "shield", clearMargin: 0.3 },
+  },
+  /* blocked-lane spawn mix (weights) + open-lane bonus spawns (cumulative chance) */
+  blockedMix: [["cactus", 0.38], ["crate", 0.28], ["tnt", 0.18], ["basic", 0.16]],
+  openSpawns: [["aku", 0.06], ["basic", 0.16], ["collectible", 0.40]],
 };
+})();

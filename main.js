@@ -1,8 +1,10 @@
 /* ============================================================
    LOOP WORLD TOUR — unified state manager
-   gameState: 'MENU' (3D Warp Room) | 'ARGENTINA' (endless runner)
+   gameState: 'MENU' (3D Warp Room) | <level id> ('argentina', …)
    Owns the single renderer + rAF loop, scene switching with a
    flash transition, and the shared level-progress store.
+   Levels come from window.LEVELS (levels.js) — any entry with a
+   `create` factory is playable; scenes are created lazily.
    ============================================================ */
 (function () {
   "use strict";
@@ -43,7 +45,7 @@
 
   /* ---- state machine ---- */
   let gameState = "MENU";
-  let scenes = {};
+  const scenes = {}; // 'MENU' + one per entered level id
   let current = null;
   let switching = false;
 
@@ -56,38 +58,50 @@
       if (current) current.exit();
       if (beforeEnter) beforeEnter();
       gameState = next;
-      current = next === "MENU" ? scenes.menu : scenes.argentina;
+      current = scenes[next];
       hudMenu.classList.toggle("hidden", next !== "MENU");
-      hudRun.classList.toggle("hidden", next !== "ARGENTINA");
+      hudRun.classList.toggle("hidden", next === "MENU");
       current.enter();
       flash.classList.remove("on");
       switching = false;
     }, 320);
   }
 
-  /* ---- environments handed to the scene modules ---- */
+  /* ---- environment handed to the scene modules ---- */
   const env = {
     dom: renderer.domElement,
     progress,
-    // MENU -> level
+    // MENU -> level (any registry entry with a create factory)
     enterLevel(id) {
-      if (id === "argentina") {
-        if (!scenes.argentina) scenes.argentina = window.createArgentinaRun(THREE, env);
-        setState("ARGENTINA");
-      }
+      const L = window.LEVELS.find((l) => l.id === id);
+      if (!L || !L.create) return;
+      if (!scenes[id]) scenes[id] = L.create(THREE, env);
+      setState(id);
     },
     // level -> MENU (cleared: did the player beat it?)
     exitToMenu(cleared) {
-      setState("MENU", () => { if (cleared) progress.add("argentina"); });
+      const id = gameState;
+      setState("MENU", () => { if (cleared && id !== "MENU") progress.add(id); });
     },
   };
 
-  /* dev/debug handle (also used by automated checks) */
-  window.__loopTour = { env, progress, get state() { return gameState; } };
+  /* dev/debug handle (also used by automated checks).
+     step(dt, n): manually advance the sim n frames — works even when
+     rAF is throttled (backgrounded preview/test runners). */
+  let simT = 0;
+  window.__loopTour = {
+    env, progress,
+    get state() { return gameState; },
+    step(dt, n) {
+      dt = dt || 1 / 60; n = n || 1;
+      for (let i = 0; i < n; i++) { simT += dt; current.update(dt, simT); }
+      renderer.render(current.scene, current.camera);
+    },
+  };
 
   /* ---- boot in the warp room ---- */
-  scenes.menu = window.createWarpRoom(THREE, env);
-  current = scenes.menu;
+  scenes.MENU = window.createWarpRoom(THREE, env);
+  current = scenes.MENU;
   hudRun.classList.add("hidden");
   current.enter();
 

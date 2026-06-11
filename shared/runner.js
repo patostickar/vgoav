@@ -1,21 +1,25 @@
 /* ============================================================
-   ARGENTINA WORLD — Endless Run scene module (Three.js)
-   window.createArgentinaRun(THREE, env) -> { scene, camera, update, enter, exit }
-   3-lane runner: A/D (or ←/→) snap lanes, Space jumps.
-   Win at WIN_SCORE points -> LEVEL CLEARED -> back to the Warp Room.
-   TNT death -> "GO HOME!" card with Return to Warp Room.
-   env: {
-     dom,                  // renderer canvas (pointer events)
-     exitToMenu(cleared),  // hand control back to the Warp Room
-   }
+   SHARED — generic 3-lane endless-runner engine (Three.js)
+   window.createRunner(THREE, env, pack) -> { scene, camera, update, enter, exit }
+
+   All level-specific content comes from the world pack:
+     pack.buildWorld(THREE, scene) — playfield, scenery, mesh factories
+     pack.obstacles — per-type behavior {kind, points, clearAt/clearMargin, deathCopy, …}
+     pack.blockedMix / pack.openSpawns — spawn tables
+     pack.winScore / pack.collectible / pack.title / startTitle / startDesc / bestKey
+
+   Mechanics owned here: lane snapping, punchy two-phase jump,
+   pooled spawning, fair-row generation, collision dispatch by kind,
+   shield (Aku) system, scoring + win, death/game-over, chase cam.
+   env: { dom, exitToMenu(cleared) }
    ============================================================ */
-window.createArgentinaRun = function (THREE, env) {
+window.createRunner = function (THREE, env, pack) {
   let active = false;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 220);
 
-  /* ---- sunny jungle lighting ---- */
+  /* ---- sunny lighting rig (pack can override later if needed) ---- */
   scene.add(new THREE.HemisphereLight(0xcfeaff, 0x9a5a30, 0.95));
   scene.add(new THREE.AmbientLight(0xfff2d8, 0.35));
   const sun = new THREE.DirectionalLight(0xfff1cf, 1.15);
@@ -27,33 +31,24 @@ window.createArgentinaRun = function (THREE, env) {
   scene.add(sun);
 
   /* ---- world + rider ---- */
-  const W = window.buildWorld1(THREE, scene);
+  const W = pack.buildWorld(THREE, scene);
   const LANE = W.laneX, FAR = W.FAR, BEHIND = W.BEHIND, SPAN = W.SPAN;
-  const vespa = window.buildVespaRun(THREE);
+  const vespa = window.buildCharacter(THREE);
   scene.add(vespa);
   const VR = vespa.userData.refs;
 
-  /* ---- pools ---- */
-  function makePool(factory) {
-    const free = [];
-    return {
-      get() { let o = free.pop(); if (!o) { o = factory(); scene.add(o); } o.visible = true; return o; },
-      release(o) { o.visible = false; o.position.set(0, -60, BEHIND - 40); free.push(o); },
-    };
-  }
-  const cratePool = makePool(W.makeCrate);
-  const cactusPool = makePool(W.makeCactus);
-  const mangoPool = makePool(W.makeMango);
-  const basicPool = makePool(W.makeBasicCrate);
-  const tntPool = makePool(W.makeTNT);
-  const akuPool = makePool(W.makeAkuCrate);
-  const POOLS = { crate: cratePool, cactus: cactusPool, basic: basicPool, tnt: tntPool, aku: akuPool };
-  let obstacles = [];   // {group,type,lane,topY,hit}
-  let mangos = [];      // {group,lane,baseY,phase,got}
-  let chips = [];       // smash particles {mesh,vx,vy,vz,life}
-  const chipPool = makePool(() =>
+  /* ---- pools (one per obstacle type, + collectible + debris) ---- */
+  const POOLS = {};
+  Object.keys(pack.obstacles).forEach((type) => {
+    POOLS[type] = window.makePool(scene, W.make[type], -60, BEHIND - 40);
+  });
+  const collectPool = window.makePool(scene, W.makeCollectible, -60, BEHIND - 40);
+  const chipPool = window.makePool(scene, () =>
     new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3),
-      new THREE.MeshStandardMaterial({ color: 0xb5763a, flatShading: true, roughness: 0.8 })));
+      new THREE.MeshStandardMaterial({ color: 0xb5763a, flatShading: true, roughness: 0.8 })), -60, BEHIND - 40);
+  let obstacles = [];   // {group,type,lane,topY,hit}
+  let collectibles = []; // {group,lane,baseY,phase,got}
+  let chips = [];       // smash particles {mesh,vx,vy,vz,life}
 
   /* ---- HUD refs ---- */
   const elScore = document.getElementById("score");
@@ -72,31 +67,35 @@ window.createArgentinaRun = function (THREE, env) {
   const clearedBanner = document.getElementById("cleared");
   const flash = document.getElementById("flash");
   const popEl = document.getElementById("pop");
+  const titleName = document.getElementById("run-title-name");
+  const titleSub = document.getElementById("run-title-sub");
+  const startTitle = document.getElementById("start-title");
+  const startDesc = document.getElementById("start-desc");
 
-  const BESTKEY = "arg_run_best_v1";
-  let best = 0; try { best = parseInt(localStorage.getItem(BESTKEY) || "0", 10) || 0; } catch (e) {}
-  elBest.textContent = best + " m";
+  let best = 0; try { best = parseInt(localStorage.getItem(pack.bestKey) || "0", 10) || 0; } catch (e) {}
 
-  /* ---- run state ---- */
-  const BASE_SPEED = 26, MAX_SPEED = 50, G = 60;
-  // punchy Crash-style jump: strong gravity, no hang time, quick return.
-  // apex = JUMP^2 / (2*G_RISE) ≈ 4.1u — clears the tallest lane cactus (3.4u)
-  const JUMP = 30, G_RISE = 110, G_FALL = 150;
-  const CLEAR_CRATE = 1.1; // min car.y to clear a crate
-  const AKU_MAX = 2;
-  const WIN_SCORE = 500;   // reach this -> LEVEL CLEARED
+  /* ---- tuning (pack.physics can override) ---- */
+  const PH = Object.assign({
+    BASE_SPEED: 26, MAX_SPEED: 50, G: 60,
+    // punchy Crash-style jump: strong gravity, no hang time, quick return.
+    // apex = JUMP^2 / (2*G_RISE) ≈ 4.1u — clears the tallest lane cactus (3.4u)
+    JUMP: 30, G_RISE: 110, G_FALL: 150,
+    SHIELD_MAX: 2,
+  }, pack.physics || {});
+  const WIN_SCORE = pack.winScore || 500;
+
   let state = "ready"; // ready | run | dead | cleared
   let lane = 1, car = { x: LANE[1], y: 0, vy: 0, grounded: true };
-  let speed = BASE_SPEED, distance = 0, mangoCount = 0, score = 0, akuPoints = 0;
+  let speed = PH.BASE_SPEED, distance = 0, collectCount = 0, score = 0, shieldPoints = 0;
   let distSinceSpawn = 0, nextGap = 13, prevOpen = [0, 1, 2];
-  let lean = 0, hopTilt = 0, shake = 0, deadT = 0, clearT = 0;
+  let lean = 0, hopTilt = 0, shake = 0, deadT = 0;
 
-  /* hovering Aku Aku shield masks trailing the vespa */
-  const akuMasks = [W.makeAkuMask(), W.makeAkuMask()];
-  akuMasks.forEach((m) => { m.visible = false; scene.add(m); });
-  function updateAkuMasks(t) {
-    akuMasks.forEach((m, i) => {
-      m.visible = active && state !== "dead" && i < akuPoints;
+  /* hovering shield icons trailing the rider */
+  const shieldIcons = [W.makeShieldIcon(), W.makeShieldIcon()];
+  shieldIcons.forEach((m) => { m.visible = false; scene.add(m); });
+  function updateShieldIcons(t) {
+    shieldIcons.forEach((m, i) => {
+      m.visible = active && state !== "dead" && i < shieldPoints;
       if (!m.visible) return;
       const side = i === 0 ? 1 : -1;
       m.position.set(car.x + side * 1.1, car.y + 2.3 + Math.sin(t * 3 + i * 2) * 0.18, -1.6);
@@ -106,19 +105,19 @@ window.createArgentinaRun = function (THREE, env) {
 
   function reset() {
     obstacles.forEach((o) => POOLS[o.type].release(o.group));
-    mangos.forEach((m) => mangoPool.release(m.group));
+    collectibles.forEach((m) => collectPool.release(m.group));
     chips.forEach((c) => chipPool.release(c.mesh));
-    obstacles = []; mangos = []; chips = [];
+    obstacles = []; collectibles = []; chips = [];
     lane = 1; car.x = LANE[1]; car.y = 0; car.vy = 0; car.grounded = true;
-    speed = BASE_SPEED; distance = 0; mangoCount = 0; score = 0; akuPoints = 0;
+    speed = PH.BASE_SPEED; distance = 0; collectCount = 0; score = 0; shieldPoints = 0;
     distSinceSpawn = 0; nextGap = 16; prevOpen = [0, 1, 2];
-    lean = 0; hopTilt = 0; shake = 0; deadT = 0; clearT = 0;
+    lean = 0; hopTilt = 0; shake = 0; deadT = 0;
     vespa.rotation.set(0, 0, 0); VR.tilt.rotation.set(0, 0, 0); VR.tilt.scale.set(1, 1, 1);
     updateHUD();
   }
   function updateHUD() {
     elDist.textContent = Math.floor(distance);
-    elMango.textContent = mangoCount;
+    elMango.textContent = collectCount;
     elSpeed.textContent = Math.round(speed * 2);
     elScore.textContent = score;
   }
@@ -131,7 +130,7 @@ window.createArgentinaRun = function (THREE, env) {
   }
   function jump() {
     if (state !== "run") return;
-    if (car.grounded) { car.vy = JUMP; car.grounded = false; }
+    if (car.grounded) { car.vy = PH.JUMP; car.grounded = false; }
   }
   function startRun() {
     if (state === "run") return;
@@ -176,7 +175,7 @@ window.createArgentinaRun = function (THREE, env) {
     tStart = null;
   });
 
-  /* card buttons */
+  /* card buttons (shared DOM — guard on active so only the live runner reacts) */
   document.getElementById("start-btn").addEventListener("click", () => { if (active) startRun(); });
   document.getElementById("retry-btn").addEventListener("click", () => { if (active && state === "dead") startRun(); });
   document.getElementById("home-btn").addEventListener("click", () => { if (active) env.exitToMenu(false); });
@@ -184,29 +183,35 @@ window.createArgentinaRun = function (THREE, env) {
 
   /* ---- spawning ---- */
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const blockedTotal = pack.blockedMix.reduce((s, m) => s + m[1], 0);
+  function pickBlockedType() {
+    let r = Math.random() * blockedTotal;
+    for (const [type, w] of pack.blockedMix) { if ((r -= w) <= 0) return type; }
+    return pack.blockedMix[0][0];
+  }
 
   function spawnObstacle(laneIdx, type, z) {
     const g = POOLS[type].get();
     g.position.set(LANE[laneIdx], 0, z);  // factories are built with origin at ground
-    g.rotation.y = type === "cactus" ? Math.random() * Math.PI * 2 : 0;
+    g.rotation.y = pack.obstacles[type].spin === false ? 0 : (type === "cactus" ? Math.random() * Math.PI * 2 : 0);
     obstacles.push({ group: g, type, lane: laneIdx, topY: g.userData.topY, hit: false });
   }
-  function spawnMango(laneIdx, z, y) {
-    const g = mangoPool.get();
+  function spawnCollectible(laneIdx, z, y) {
+    const g = collectPool.get();
     g.position.set(LANE[laneIdx], y, z);
-    mangos.push({ group: g, lane: laneIdx, baseY: y, phase: Math.random() * 6.28, got: false });
+    collectibles.push({ group: g, lane: laneIdx, baseY: y, phase: Math.random() * 6.28, got: false });
   }
 
   function spawnRow() {
     const z = FAR;
-    // ~24% chance: a mango arc to reward jumping
+    // ~24% chance: a collectible arc to reward jumping
     if (Math.random() < 0.24) {
       const ln = prevOpen[(Math.random() * prevOpen.length) | 0];
       const n = 4 + ((Math.random() * 3) | 0);
       for (let i = 0; i < n; i++) {
         const t = i / (n - 1);
         const y = 0.9 + Math.sin(t * Math.PI) * 2.6; // arc up & over
-        spawnMango(ln, z + i * 2.4, y);
+        spawnCollectible(ln, z + i * 2.4, y);
       }
       prevOpen = [0, 1, 2];
       return;
@@ -221,23 +226,18 @@ window.createArgentinaRun = function (THREE, env) {
       tries++;
     } while (tries < 8 && !open.some((o) => prevOpen.some((p) => Math.abs(o - p) <= 1)));
     const blockedLanes = [0, 1, 2].filter((l) => !open.includes(l));
-    blockedLanes.forEach((l) => {
-      // weighted mix: cacti + labelled crates remain the staples, TNT spices it up
-      const r = Math.random();
-      const type = r < 0.38 ? "cactus" : r < 0.66 ? "crate" : r < 0.84 ? "tnt" : "basic";
-      spawnObstacle(l, type, z + (Math.random() - 0.5) * 1.2);
-    });
-    // open lanes: mango, a bonus basic crate, or (rarely) an Aku Aku crate
+    blockedLanes.forEach((l) => spawnObstacle(l, pickBlockedType(), z + (Math.random() - 0.5) * 1.2));
+    // open lanes: pack-defined bonus spawns (cumulative chances)
     const r2 = Math.random();
-    if (r2 < 0.06) {
-      const ln = open[(Math.random() * open.length) | 0];
-      spawnObstacle(ln, "aku", z);
-    } else if (r2 < 0.22) {
-      const ln = open[(Math.random() * open.length) | 0];
-      spawnObstacle(ln, "basic", z);
-    } else if (r2 < 0.62) {
-      const ln = open[(Math.random() * open.length) | 0];
-      spawnMango(ln, z, 0.9);
+    let acc = 0;
+    for (const [what, chance] of pack.openSpawns) {
+      acc += chance;
+      if (r2 < acc) {
+        const ln = open[(Math.random() * open.length) | 0];
+        if (what === "collectible") spawnCollectible(ln, z, 0.9);
+        else spawnObstacle(ln, what, z);
+        break;
+      }
     }
     prevOpen = open;
   }
@@ -245,10 +245,11 @@ window.createArgentinaRun = function (THREE, env) {
   /* ---- scoring / win ---- */
   function addScore(n) {
     score += n;
+    updateHUD(); // immediate, so the final score shows even when the win freezes the run
     if (state === "run" && score >= WIN_SCORE) levelCleared();
   }
 
-  /* ---- smash / crash / clear ---- */
+  /* ---- effects + collision outcomes ---- */
   function debris(o, n) {
     const p = o.group.position;
     for (let i = 0; i < n; i++) {
@@ -259,38 +260,31 @@ window.createArgentinaRun = function (THREE, env) {
       chips.push({ mesh: m, vx: (Math.random() - 0.5) * 6, vy: 4 + Math.random() * 6, vz: (Math.random() - 0.5) * 6 - speed * 0.2, life: 0.7 + Math.random() * 0.4 });
     }
   }
-  function smashCrate(o) {
+  function smash(o, cfg) {
     debris(o, 10);
-    cratePool.release(o.group);
-    mangoCount += 1; // crates drop a wumpa-style bonus
+    POOLS[o.type].release(o.group);
+    if (cfg.drops) collectCount += cfg.drops;
     shake = Math.max(shake, 0.18);
-    popText("SMASH! +25", "#ffd24a");
-    addScore(25);
+    popText(cfg.pop || "+" + cfg.points, "#ffd24a");
+    addScore(cfg.points || 0);
   }
-  function smashBasic(o) {
-    debris(o, 8);
-    basicPool.release(o.group);
-    shake = Math.max(shake, 0.15);
-    popText("+10", "#ffd24a");
-    addScore(10);
-  }
-  function collectAku(o) {
+  function collectShield(o) {
     debris(o, 6);
-    akuPool.release(o.group);
-    if (akuPoints < AKU_MAX) akuPoints += 1;
+    POOLS[o.type].release(o.group);
+    if (shieldPoints < PH.SHIELD_MAX) shieldPoints += 1;
     popText("AKU AKU!", "#7fe0ff");
   }
-  // a deadly hit (cactus or TNT): the shield absorbs it, otherwise crash
-  function deadlyHit(o) {
-    if (akuPoints > 0) {
-      akuPoints -= 1;
+  // a deadly hit: the shield absorbs it, otherwise crash
+  function deadlyHit(o, cfg) {
+    if (shieldPoints > 0) {
+      shieldPoints -= 1;
       debris(o, 12);
       POOLS[o.type].release(o.group);
       shake = Math.max(shake, 0.3);
       popText("SHIELDED!", "#7fe0ff");
       return true; // survived — obstacle destroyed
     }
-    crash(o.type);
+    crash(cfg.deathCopy);
     return false;
   }
   let popT = 0;
@@ -300,19 +294,22 @@ window.createArgentinaRun = function (THREE, env) {
     popEl.classList.add("show"); popT = 0.7;
   }
 
-  function crash(cause) {
+  function saveBest() {
+    distance = Math.floor(distance);
+    if (distance > best) { best = distance; try { localStorage.setItem(pack.bestKey, String(best)); } catch (e) {} }
+  }
+
+  function crash(deathCopy) {
     if (state !== "run") return;
     state = "dead"; deadT = 0;
     flash.style.setProperty("--c", "#ff3b2e");
     flash.classList.add("on"); setTimeout(() => flash.classList.remove("on"), 220);
     shake = 0.6; car.vy = 9;
-    distance = Math.floor(distance);
-    if (distance > best) { best = distance; try { localStorage.setItem(BESTKEY, String(best)); } catch (e) {} }
-    // cartoonish TNT-specific game over
-    if (cause === "tnt") { overEy.textContent = "KA-BOOM!"; overTitle.textContent = "GO HOME!"; }
-    else { overEy.textContent = "Wiped Out!"; overTitle.textContent = "Run Over"; }
+    saveBest();
+    overEy.textContent = (deathCopy && deathCopy.ey) || "Wiped Out!";
+    overTitle.textContent = (deathCopy && deathCopy.title) || "Run Over";
     overDist.textContent = distance + " m";
-    overMango.textContent = mangoCount;
+    overMango.textContent = collectCount;
     overScore.textContent = score;
     overBest.textContent = best + " m";
     elBest.textContent = best + " m";
@@ -320,9 +317,8 @@ window.createArgentinaRun = function (THREE, env) {
   }
 
   function levelCleared() {
-    state = "cleared"; clearT = 0;
-    distance = Math.floor(distance);
-    if (distance > best) { best = distance; try { localStorage.setItem(BESTKEY, String(best)); } catch (e) {} }
+    state = "cleared";
+    saveBest();
     clearedBanner.classList.add("show");
     // celebrate, then hand back to the Warp Room with the level marked cleared
     setTimeout(() => { if (active) env.exitToMenu(true); }, 2800);
@@ -336,7 +332,7 @@ window.createArgentinaRun = function (THREE, env) {
   function update(dt, t) {
     if (state === "run") {
       // speed ramps with distance
-      speed = Math.min(MAX_SPEED, BASE_SPEED + distance * 0.014);
+      speed = Math.min(PH.MAX_SPEED, PH.BASE_SPEED + distance * 0.014);
       distance += speed * dt;
       distSinceSpawn += speed * dt;
       if (distSinceSpawn >= nextGap) {
@@ -346,7 +342,6 @@ window.createArgentinaRun = function (THREE, env) {
       }
       updateHUD();
     }
-    if (state === "cleared") clearT += dt;
 
     /* lane snap (frame-independent, snappy) */
     const targetX = LANE[lane];
@@ -355,12 +350,12 @@ window.createArgentinaRun = function (THREE, env) {
 
     /* jump arc — strong two-phase gravity: punchy rise, fast snappy fall */
     if (!car.grounded || car.y > 0) {
-      const g = car.vy > 0 ? G_RISE : G_FALL;
+      const g = car.vy > 0 ? PH.G_RISE : PH.G_FALL;
       car.vy -= g * dt; car.y += car.vy * dt;
       if (car.y <= 0 && state !== "dead") { car.y = 0; car.vy = 0; if (!car.grounded) hopTilt = 0.42; car.grounded = true; }
     }
 
-    /* place vespa */
+    /* place rider */
     vespa.position.set(car.x, car.y, 0);
     hopTilt *= 0.84;
     VR.tilt.rotation.z = -lean;
@@ -374,7 +369,7 @@ window.createArgentinaRun = function (THREE, env) {
     if (state === "dead") { // tumble
       deadT += dt;
       vespa.rotation.z += dt * 4; vespa.rotation.x += dt * 2.4;
-      car.vy -= G * dt; car.y += car.vy * dt;
+      car.vy -= PH.G * dt; car.y += car.vy * dt;
       vespa.position.y = Math.max(0.4, car.y);
     }
 
@@ -385,59 +380,50 @@ window.createArgentinaRun = function (THREE, env) {
         s.group.position.z -= move * (s.far ? 0.55 : 1);
         if (s.group.position.z < BEHIND) s.group.position.z += SPAN;
       });
-      // obstacles
+      // obstacles — collision dispatch is driven by the pack's behavior table
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const o = obstacles[i]; o.group.position.z -= move;
-        // collision check at the player plane (only while racing)
         if (state === "run" && !o.hit && o.group.position.z <= 0.7 && o.group.position.z > -1.4 && o.lane === lane) {
           o.hit = true;
-          if (o.type === "cactus" || o.type === "tnt") {
-            // jumpable with a clean apex; otherwise deadly unless shielded
-            if (car.y > o.topY - 0.4) { /* cleanly vaulted */ }
-            else if (deadlyHit(o)) { obstacles.splice(i, 1); continue; }
-          } else if (o.type === "basic") {
-            // any contact (driving or jumping into it) smashes for points
-            if (car.y > o.topY + 0.3) { /* sailed clean over */ }
-            else { smashBasic(o); obstacles.splice(i, 1); continue; }
-          } else if (o.type === "aku") {
-            if (car.y > o.topY + 0.3) { /* missed it */ }
-            else { collectAku(o); obstacles.splice(i, 1); continue; }
-          } else { // labelled crate
-            if (car.y > CLEAR_CRATE) { /* cleanly vaulted */ }
-            else { smashCrate(o); obstacles.splice(i, 1); continue; }
-          }
+          const cfg = pack.obstacles[o.type];
+          const clearY = cfg.clearAt !== undefined ? cfg.clearAt : o.topY + (cfg.clearMargin || 0);
+          if (car.y > clearY) { /* cleanly vaulted */ }
+          else if (cfg.kind === "deadly") { if (deadlyHit(o, cfg)) { obstacles.splice(i, 1); continue; } }
+          else if (cfg.kind === "smash") { smash(o, cfg); obstacles.splice(i, 1); continue; }
+          else if (cfg.kind === "shield") { collectShield(o); obstacles.splice(i, 1); continue; }
         }
         if (o.group.position.z < BEHIND) {
           POOLS[o.type].release(o.group);
           obstacles.splice(i, 1);
         }
       }
-      // mangos
-      for (let i = mangos.length - 1; i >= 0; i--) {
-        const m = mangos[i]; m.group.position.z -= move;
+      // collectibles
+      for (let i = collectibles.length - 1; i >= 0; i--) {
+        const m = collectibles[i]; m.group.position.z -= move;
         m.group.rotation.y += dt * 2.4;
         m.group.position.y = m.baseY + Math.sin(t * 3 + m.phase) * 0.12;
         if (state === "run" && !m.got && m.group.position.z <= 0.9 && m.group.position.z > -1.2 && m.lane === lane
           && Math.abs(car.y + 1.4 - m.group.position.y) < 1.5) {
-          m.got = true; mangoCount += 1; popText("MANGO +5", "#ffb01e");
-          addScore(5);
-          mangoPool.release(m.group); mangos.splice(i, 1); continue;
+          m.got = true; collectCount += 1;
+          popText(pack.collectible.name + " +" + pack.collectible.points, "#ffb01e");
+          addScore(pack.collectible.points);
+          collectPool.release(m.group); collectibles.splice(i, 1); continue;
         }
-        if (m.group.position.z < BEHIND) { mangoPool.release(m.group); mangos.splice(i, 1); }
+        if (m.group.position.z < BEHIND) { collectPool.release(m.group); collectibles.splice(i, 1); }
       }
     }
 
     /* chips */
     for (let i = chips.length - 1; i >= 0; i--) {
       const c = chips[i]; c.life -= dt;
-      c.vy -= G * dt;
+      c.vy -= PH.G * dt;
       c.mesh.position.x += c.vx * dt; c.mesh.position.y += c.vy * dt; c.mesh.position.z += c.vz * dt;
       c.mesh.rotation.x += dt * 7; c.mesh.rotation.y += dt * 6;
       if (c.life <= 0 || c.mesh.position.y < -1) { chipPool.release(c.mesh); chips.splice(i, 1); }
     }
 
-    /* aku shield masks */
-    updateAkuMasks(t);
+    /* shield icons */
+    updateShieldIcons(t);
 
     /* pop text fade */
     if (popT > 0) { popT -= dt; if (popT <= 0) popEl.classList.remove("show"); }
@@ -458,6 +444,11 @@ window.createArgentinaRun = function (THREE, env) {
     reset();
     state = "ready";
     camPos.set(0, 5.4, -9.2); camLook.set(0, 1.4, 6);
+    // brand the shared run HUD for this world
+    titleName.textContent = pack.title;
+    titleSub.textContent = pack.subtitle;
+    startTitle.textContent = pack.startTitle;
+    startDesc.innerHTML = pack.startDesc;
     startCard.classList.remove("hide"); startCard.classList.add("show");
     overCard.classList.remove("show");
     clearedBanner.classList.remove("show");
@@ -468,7 +459,7 @@ window.createArgentinaRun = function (THREE, env) {
     startCard.classList.remove("show"); startCard.classList.add("hide");
     overCard.classList.remove("show");
     clearedBanner.classList.remove("show");
-    akuMasks.forEach((m) => (m.visible = false));
+    shieldIcons.forEach((m) => (m.visible = false));
   }
 
   reset();
