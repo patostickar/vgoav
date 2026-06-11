@@ -1,16 +1,15 @@
 /* ============================================================
-   WARP ROOM — menu scene module (Three.js)
+   WARP ROOM — scene module (Three.js)
    window.createWarpRoom(THREE, env) -> { scene, camera, update, enter, exit }
-   Portals, pads, and the unlock chain are all driven by
-   window.LEVELS (levels.js). Drive onto a pad + ENTER to warp.
+   Drive the Vespa (steer + accelerate + jump), third-person chase
+   cam, pressure-pad selection, ENTER to warp, boss padlock + unlock.
    env: {
-     dom,                            // renderer canvas
-     enterLevel(id),                 // launch a level scene
+     dom,                       // renderer canvas (pointer events)
+     enterLevel(id),            // ask the state manager to launch a level scene
      progress: { list(), add(id) },  // shared cleared-levels store
    }
    ============================================================ */
 window.createWarpRoom = function (THREE, env) {
-  const LEVELS = window.LEVELS;
   let active = false;
 
   const scene = new THREE.Scene();
@@ -27,22 +26,20 @@ window.createWarpRoom = function (THREE, env) {
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 60; sun.shadow.bias = -0.0004;
   scene.add(sun);
 
-  /* ---- build world + character (green Warp-Room paint job) ---- */
-  const refs = window.buildRoom(THREE, scene, LEVELS);
-  const vespa = window.buildCharacter(THREE, { body: 0x27b34a, bodyD: 0x1b8838, bodyL: 0x53d177 });
+  /* ---- build world + character ---- */
+  const refs = window.buildRoom(THREE, scene);
+  const vespa = window.buildVespaWarp(THREE);
   scene.add(vespa);
   const VR = vespa.userData.refs;
 
-  /* ---- progression (shared store, unlock chain from the registry) ---- */
+  /* ---- progression (shared with the state manager) ---- */
   let cleared = env.progress.list();
-  const bossUnlocked = () =>
-    LEVELS.filter((L) => !L.boss).every((L) => cleared.includes(L.id));
+  const bossUnlocked = () => ["argentina", "rome", "denmark"].every((id) => cleared.includes(id));
+  // unlock chain: Argentina is open; each next region unlocks after the previous
   function lockInfo(L) {
-    if (L.unlockedBy === "ALL") return bossUnlocked() ? null : "&#128274; SEALED — clear all regions";
-    if (L.unlockedBy && !cleared.includes(L.unlockedBy)) {
-      const dep = LEVELS.find((x) => x.id === L.unlockedBy);
-      return "&#128274; LOCKED — clear " + (dep ? dep.name : L.unlockedBy) + " first";
-    }
+    if (L.boss) return bossUnlocked() ? null : "&#128274; SEALED — clear all regions";
+    if (L.id === "rome" && !cleared.includes("argentina")) return "&#128274; LOCKED — clear Argentina first";
+    if (L.id === "denmark" && !cleared.includes("rome")) return "&#128274; LOCKED — clear Rome first";
     return null;
   }
 
@@ -58,8 +55,7 @@ window.createWarpRoom = function (THREE, env) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.14, 8, 24),
       new THREE.MeshStandardMaterial({ color: 0xeafff0, emissive: 0x9dffc4, emissiveIntensity: 0.6, flatShading: true }));
     g.add(ring);
-    g.position.set(0, 0.4, 1.5); // floating over the portal surface, facing the room
-    g.scale.setScalar(0.8);
+    g.position.set(0, 4.8, 0.6); // above the portal, in portal-group space
     g.visible = false;
     p.group.add(g);
     checkmarks[p.level.id] = g;
@@ -97,12 +93,9 @@ window.createWarpRoom = function (THREE, env) {
   const toastEl = document.getElementById("toast");
   const flash = document.getElementById("flash");
   const progEl = document.getElementById("prog-count");
-  const nBoss = LEVELS.filter((L) => !L.boss).length;
   let toastT;
   function toast(m) { toastEl.textContent = m; toastEl.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("show"), 1200); }
-  function updateProg() {
-    progEl.textContent = LEVELS.filter((L) => !L.boss && cleared.includes(L.id)).length + " / " + nBoss;
-  }
+  function updateProg() { progEl.textContent = cleared.filter((c) => c !== "sardegna").length + " / 3"; }
 
   /* ---- selection ---- */
   let activePad = null;
@@ -142,15 +135,15 @@ window.createWarpRoom = function (THREE, env) {
       toast(L.boss ? "SEALED!" : "LOCKED!");
       return;
     }
-    if (L.create) {
+    if (L.id === "argentina") {
       // real playable level — hand off to the state manager
       warping = true;
       toast("WARPING TO " + L.name.toUpperCase());
       setTimeout(() => { warping = false; }, 600);
-      env.enterLevel(L.id);
+      env.enterLevel("argentina");
       return;
     }
-    // no scene yet: simulate the clear (placeholder until the world is built)
+    // rome / denmark have no scene yet: simulate the clear (placeholder behavior)
     warping = true;
     flash.style.setProperty("--c", "#" + L.glow.toString(16).padStart(6, "0"));
     flash.classList.add("on");
@@ -231,7 +224,7 @@ window.createWarpRoom = function (THREE, env) {
     /* checkmark idle bob */
     Object.keys(checkmarks).forEach((id, i) => {
       const c = checkmarks[id];
-      if (c.visible) { c.rotation.y = Math.sin(t * 1.4 + i) * 0.18; c.position.y = 0.4 + Math.sin(t * 2 + i) * 0.12; }
+      if (c.visible) { c.rotation.y = Math.sin(t * 1.4 + i) * 0.18; c.position.y = 4.8 + Math.sin(t * 2 + i) * 0.12; }
     });
 
     /* camera */

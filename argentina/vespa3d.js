@@ -1,21 +1,15 @@
 /* ============================================================
-   SHARED — the hero: stylized low-poly "Viking Gaucho on a Vespa"
-   Logo-matched model built from THREE primitives. Faces +Z.
-   window.buildCharacter(THREE, opts) ->
-     group with userData.refs:{ tilt, wheelF, wheelR, headlight, spot, cone }
-   opts.body / opts.bodyD / opts.bodyL — Vespa paint job
-   (blue for the runner worlds, green in the Warp Room, etc.)
-   Animation contract:
-     refs.tilt   — lean / pitch / squash group (children get the english)
+   ARGENTINA — Stylized low-poly "Viking Gaucho on a blue Vespa"
+   Logo-matched hero model, built from THREE primitives. Faces +Z.
+   window.buildVespa(THREE) ->
+     { group, userData.refs:{ tilt, wheelF, wheelR, headlight, spot, cone } }
+   Animation contract preserved:
+     refs.tilt   — lean / pitch / squash group (children of it get the english)
      refs.wheelF / refs.wheelR — spin around local X
    ============================================================ */
-window.buildCharacter = function (THREE, opts) {
-  opts = opts || {};
+window.buildVespaRun = function (THREE) {
   const C = {
-    body: opts.body !== undefined ? opts.body : 0x2f63c8,
-    bodyD: opts.bodyD !== undefined ? opts.bodyD : 0x21489c,
-    bodyL: opts.bodyL !== undefined ? opts.bodyL : 0x5a8cea,
-    cream: 0xf4ead2,
+    blue: 0x2f63c8, blueD: 0x21489c, blueL: 0x5a8cea, cream: 0xf4ead2,
     chrome: 0xdfe5ec, tire: 0x222229, hub: 0xc9ccd2,
     poncho: 0x9a5a2c, ponchoD: 0x73411d, weave: 0xc88a4a,
     skin: 0xeab487, skinD: 0xd79b6e, beard: 0xe5a32a, beardD: 0xc8861a,
@@ -44,7 +38,7 @@ window.buildCharacter = function (THREE, opts) {
     tire.rotation.z = Math.PI / 2; tire.castShadow = true; g.add(tire);
     const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.38, 16), mat(C.chrome, { metalness: 0.6, roughness: 0.28 }));
     rim.rotation.z = Math.PI / 2; g.add(rim);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.2, r * 0.2, 0.42, 10), mat(C.bodyL, { metalness: 0.3 }));
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.2, r * 0.2, 0.42, 10), mat(C.blueL, { metalness: 0.3 }));
     cap.rotation.z = Math.PI / 2; g.add(cap);
     for (let i = 0; i < 4; i++) {
       const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.07, r * 0.9), mat(C.hub));
@@ -55,33 +49,34 @@ window.buildCharacter = function (THREE, opts) {
   const wheelR = makeWheel(0.52); wheelR.position.set(0, 0.52, -0.92); tilt.add(wheelR);
   const wheelF = makeWheel(0.52); wheelF.position.set(0, 0.52, 0.98); tilt.add(wheelF);
 
-  /* ---------- Vespa body ---------- */
+  /* ---------- blue Vespa body ---------- */
   // foot deck / running board
-  add(new THREE.BoxGeometry(0.78, 0.2, 1.5), mat(C.bodyD), 0, 0.52, 0.02);
+  add(new THREE.BoxGeometry(0.78, 0.2, 1.5), mat(C.blueD), 0, 0.52, 0.02);
   // central spine cowl
-  add(new THREE.BoxGeometry(0.66, 0.62, 1.2), mat(C.body), 0, 0.92, -0.42);
+  add(new THREE.BoxGeometry(0.66, 0.62, 1.2), mat(C.blue), 0, 0.92, -0.42);
   // iconic rounded rear haunches (bulging side panels)
   [-1, 1].forEach((s) => {
-    const haunch = add(new THREE.SphereGeometry(0.62, 16, 12), mat(C.body), s * 0.34, 0.95, -0.5);
+    const haunch = add(new THREE.SphereGeometry(0.62, 16, 12), mat(C.blue), s * 0.34, 0.95, -0.5);
     haunch.scale.set(0.85, 1.0, 1.25);
   });
   // rear top cowl cap
-  add(new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.bodyL), 0, 1.22, -0.55).scale.set(1.1, 0.8, 1.35);
+  add(new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.blueL), 0, 1.22, -0.55).scale.set(1.1, 0.8, 1.35);
   // chrome trim strip along the side
   [-1, 1].forEach((s) => add(new THREE.BoxGeometry(0.06, 0.1, 1.1), mat(C.chrome, { metalness: 0.7, roughness: 0.25 }), s * 0.62, 0.86, -0.45));
   // round Vespa side emblem
   [-1, 1].forEach((s) => add(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 14), mat(C.cream, { metalness: 0.3 }), s * 0.66, 1.0, -0.55).rotation.z = Math.PI / 2);
 
   // front leg shield (apron) — tall curved panel
-  const shield = add(new THREE.BoxGeometry(0.82, 1.12, 0.3), mat(C.body), 0, 1.04, 0.92);
+  const shield = add(new THREE.BoxGeometry(0.82, 1.12, 0.3), mat(C.blue), 0, 1.04, 0.92);
   shield.rotation.x = -0.14;
-  add(new THREE.BoxGeometry(0.7, 0.5, 0.28), mat(C.bodyL), 0, 1.5, 0.86).rotation.x = -0.14; // upper shield highlight
+  add(new THREE.BoxGeometry(0.7, 0.5, 0.28), mat(C.blueL), 0, 1.5, 0.86).rotation.x = -0.14; // upper shield highlight
   // front fender hugging the wheel
-  add(new THREE.BoxGeometry(0.5, 0.34, 0.92), mat(C.body), 0, 0.78, 0.98);
-  add(new THREE.CylinderGeometry(0.62, 0.62, 0.46, 14, 1, true), mat(C.bodyD), 0, 0.98, 0.98).rotation.z = Math.PI / 2; // fender arch
+  const fender = add(new THREE.BoxGeometry(0.5, 0.34, 0.92), mat(C.blue), 0, 0.78, 0.98);
+  fender.rotation.x = 0.0;
+  add(new THREE.CylinderGeometry(0.62, 0.62, 0.46, 14, 1, true), mat(C.blueD), 0, 0.98, 0.98).rotation.z = Math.PI / 2; // fender arch
 
   // handlebar mast + bars + grips
-  const mast = add(new THREE.BoxGeometry(0.34, 0.7, 0.34), mat(C.bodyL), 0, 1.74, 0.9);
+  const mast = add(new THREE.BoxGeometry(0.34, 0.7, 0.34), mat(C.blueL), 0, 1.74, 0.9);
   mast.rotation.x = -0.16;
   const bar = add(new THREE.CylinderGeometry(0.05, 0.05, 0.92, 10), mat(C.chrome, { metalness: 0.7, roughness: 0.25 }), 0, 1.96, 0.86);
   bar.rotation.z = Math.PI / 2;

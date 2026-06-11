@@ -83,7 +83,7 @@
 
 <!-- ================= RUN HUD (Argentina) ================= -->
 <div class="hud hidden" id="hud-run">
-  <div class="title"><b id="run-title-name">Argentina</b><span id="run-title-sub">Scene 1 · Endless Pampas Run</span></div>
+  <div class="title"><b>Argentina</b><span>Scene 1 · Endless Pampas Run</span></div>
 
   <div class="scores">
     <div class="stat dist"><div class="v" id="dist">0</div><div class="l">Metres</div></div>
@@ -105,8 +105,8 @@
   <div class="card" id="start">
     <div class="panel">
       <div class="ey">Viking Gauchos on a Vespa</div>
-      <h2 id="start-title">Argentina Run</h2>
-      <p id="start-desc">Three lanes of red pampas dirt. Score <b>500 points</b> to clear the level!<br>Jump cacti, smash crates, dodge TNT, grab Aku Aku masks.</p>
+      <h2>Argentina Run</h2>
+      <p>Three lanes of red pampas dirt. Score <b>500 points</b> to clear the level!<br>Jump cacti, smash crates, dodge TNT, grab Aku Aku masks.</p>
       <div class="keys">
         <span class="k"><span class="key">A</span><span class="key">D</span> snap lanes</span>
         <span class="k"><span class="key">Space</span> jump</span>
@@ -147,17 +147,12 @@
 <div class="flash" id="flash"></div>
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-<!-- shared components -->
-<script src="shared/materials.js"></script>
-<script src="shared/pool.js"></script>
-<script src="shared/character.js"></script>
-<script src="shared/runner.js"></script>
-<!-- worlds (one script per world pack) -->
-<script src="worlds/argentina/world.js"></script>
-<!-- level registry + menu -->
-<script src="levels.js"></script>
-<script src="menu/room.js"></script>
-<script src="menu/warp.js"></script>
+<script src="game3d/vespa3d.js"></script>
+<script src="game3d/room3d.js"></script>
+<script src="game3d/app3d.js"></script>
+<script src="argentina/vespa3d.js"></script>
+<script src="argentina/world1.js"></script>
+<script src="argentina/run3d.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

@@ -1,10 +1,25 @@
 /* ============================================================
    WARP ROOM — circular low-poly stone hub
-   window.buildRoom(THREE, scene, levels) -> { pads, portals, unlockBoss(), refs }
-   `levels` comes from levels.js — one portal + pressure pad per entry.
+   window.WARP_LEVELS  — level/portal definitions (shared)
+   window.buildRoom(THREE, scene) -> { pads, portals, unlockBoss(), refs }
    ============================================================ */
-window.buildRoom = function (THREE, scene, levels) {
-  const { mat, emis } = window.matHelpers(THREE);
+
+window.WARP_LEVELS = [
+  { id:"argentina", name:"Argentina", mode:"Endless Temple Run",
+    color:0xf2b705, glow:0xffd24a, accent:0xc75b39, angle: Math.PI * 0.25, boss:false },
+  { id:"rome", name:"Rome", mode:"City Traffic Dash",
+    color:0xe4d2a4, glow:0xff5a3c, accent:0xb3261e, angle: Math.PI * 1.75, boss:false },
+  { id:"denmark", name:"Denmark", mode:"Viking Fjord Hop",
+    color:0x2e9fd6, glow:0x00dcff, accent:0x2e6fb0, angle: Math.PI * 0.75, boss:false },
+  { id:"sardegna", name:"Sardegna", mode:"BOSS · The Nuragic Colossus",
+    color:0xe0331f, glow:0xf68d2e, accent:0x8a8275, angle: Math.PI * 1.25, boss:true },
+];
+
+window.buildRoom = function (THREE, scene) {
+  const mat = (color, o = {}) =>
+    new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: true, roughness: 0.85, metalness: 0.05 }, o));
+  const emis = (color, i = 1) =>
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: i, flatShading: true, roughness: 0.5 });
 
   const STONE = 0xcdb185, STONE_D = 0xb2986b, STONE_L = 0xe0c79a, MOSS = 0x6f8a3a;
   const WALL_R = 16, WALL_H = 11, FRAME_R = 14.6, PAD_R = 9.2;
@@ -79,7 +94,7 @@ window.buildRoom = function (THREE, scene, levels) {
   const pads = [], portals = [];
   let bossRefs = null;
 
-  levels.forEach((L) => {
+  WARP_LEVELS.forEach((L) => {
     const a = L.angle, dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
 
     /* portal frame group (faces room center) */
