@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>body{margin:0;overflow:hidden} canvas{display:block}</style>
+</head>
+<body>
+<script>
+// Auto-click after fonts load + 3D builds
+window.addEventListener('load', function() {
+  // Wait for the splash to appear then auto-enter
+  setTimeout(function() {
+    const btn = document.getElementById('vg-enter');
+    if (btn) btn.click();
+  }, 1000);
+});
+</script>
+<!-- Include the real game -->
+<script>document.write('<scr'+'ipt src="index.html"></scr'+'ipt>')</script>
+</body></html>

@@ -530,7 +530,7 @@ window.createArgentinaRun = function (THREE, env) {
         m.group.position.y = m.baseY + Math.sin(t * 3 + m.phase) * 0.12;
         if (state === "run" && !m.got && m.group.position.z <= 0.9 && m.group.position.z > -1.2 && m.lane === lane
           && Math.abs(car.y + 1.4 - m.group.position.y) < 1.5) {
-          m.got = true; mangoCount += 1; popText("MANGO +5", "#ffb01e");
+          m.got = true; mangoCount += 1; popText("COIN! +5", "#ffd700");
           addScore(5); audio.mango();
           mangoPool.release(m.group); mangos.splice(i, 1); continue;
         }

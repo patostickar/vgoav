@@ -228,7 +228,7 @@ window.createWarpRoom = function (THREE, env) {
       const cr = Math.hypot(camPos.x, camPos.z);
       if (cr > 13.5) { const k = 13.5 / cr; camPos.x *= k; camPos.z *= k; }
       if (camPos.y < 2.4) camPos.y = 2.4;
-      camLook.lerp(new THREE.Vector3(car.x, car.y + 1.6, car.z), 0.14);
+      camLook.lerp(new THREE.Vector3(car.x, car.y + 4.0, car.z), 0.14);
     }
     camera.position.copy(camPos);
     camera.lookAt(camLook);
@@ -242,7 +242,7 @@ window.createWarpRoom = function (THREE, env) {
     // respawn at the center of the room (just off the dais), facing the camera
     car.x = 0; car.z = 6; car.y = 0; car.h = Math.PI; car.speed = 0; car.vy = 0; car.grounded = true;
     Object.keys(keys).forEach((k) => (keys[k] = false));
-    camPos.set(0, 6, 13); camLook.set(0, 1.6, 6);
+    camPos.set(0, 6, 13); camLook.set(0, 4.0, 6);
     topView = false; warping = false;
     refresh();
   }
