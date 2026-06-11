@@ -1,0 +1,56 @@
+/* Splash overlay for Loop World Tour — scoped with .vg- prefix so it never
+   collides with the game HUD's style.css (.key/.flash/.title/etc.). */
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@500;600;700;800&display=swap');
+
+#vg-splash{ position:fixed; inset:0; z-index:200; display:grid; place-items:center;
+  font-family:'Baloo 2',system-ui,sans-serif; color:#fff;
+  background:radial-gradient(120% 80% at 50% -10%, #3a1d6e 0%, #190a36 42%, #120626 100%);
+  transition:opacity .55s ease; }
+#vg-splash.vg-hide{ opacity:0; pointer-events:none; }
+
+#vg-splash .vg-stars{ position:absolute; inset:-40px; pointer-events:none; }
+#vg-splash .vg-stars i{ position:absolute; border-radius:50%; background:#fff;
+  animation:vgtw var(--d,4s) ease-in-out infinite alternate; }
+@keyframes vgtw{ from{opacity:.12} to{opacity:.95} }
+#vg-splash .vg-nebula{ position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; opacity:.5;
+  background:
+    radial-gradient(40% 50% at 18% 30%, rgba(122,31,158,.5), transparent 70%),
+    radial-gradient(35% 45% at 84% 22%, rgba(48,80,210,.4), transparent 70%),
+    radial-gradient(50% 50% at 70% 90%, rgba(255,176,30,.12), transparent 70%); }
+#vg-splash .vg-vignette{ position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(80% 70% at 50% 45%, transparent 55%, rgba(8,3,18,.7) 100%); }
+
+#vg-splash .vg-inner{ position:relative; text-align:center; display:flex; flex-direction:column;
+  align-items:center; transform:translateY(-1.5%); }
+#vg-splash .vg-crest{ position:relative; width:min(44vh,400px); aspect-ratio:1000/545; margin-bottom:6px;
+  filter:drop-shadow(0 14px 40px rgba(0,0,0,.55)); animation:vgfloat 6s ease-in-out infinite; }
+#vg-splash .vg-crest img{ width:100%; height:100%; object-fit:contain; }
+#vg-splash .vg-crest::after{ content:""; position:absolute; inset:-14% -6% -10%; z-index:-1; border-radius:50%;
+  background:radial-gradient(closest-side, rgba(255,210,74,.22), transparent 70%); }
+@keyframes vgfloat{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+
+#vg-splash .vg-eyebrow{ font-weight:800; letter-spacing:.34em; text-transform:uppercase; font-size:13px;
+  color:#ffd24a; margin-top:6px; }
+#vg-splash h1{ font-family:'Luckiest Guy',cursive; font-weight:400; margin:6px 0 2px;
+  font-size:clamp(42px,7vw,82px); line-height:.92; color:#fff;
+  text-shadow:0 4px 0 #7a1f9e, 0 6px 0 #0d0420, 0 16px 30px rgba(0,0,0,.55); }
+#vg-splash .vg-tag{ color:#cdbbf2; font-weight:600; font-size:clamp(14px,1.7vw,18px);
+  max-width:36ch; margin:2px auto 26px; }
+#vg-splash .vg-tag b{ color:#ffb01e; font-weight:800; }
+
+#vg-splash .vg-cta{ font-family:'Luckiest Guy',cursive; font-size:24px; color:#0d0420;
+  background:linear-gradient(180deg,#ffe07a,#ffb01e); border:none; border-radius:16px;
+  padding:16px 38px; cursor:pointer; letter-spacing:.02em;
+  box-shadow:0 6px 0 #b9760a, 0 12px 24px rgba(0,0,0,.45);
+  transition:transform .08s, box-shadow .08s, filter .15s; }
+#vg-splash .vg-cta:hover{ filter:brightness(1.05); transform:translateY(-1px); }
+#vg-splash .vg-cta:active{ transform:translateY(4px); box-shadow:0 2px 0 #b9760a, 0 6px 12px rgba(0,0,0,.4); }
+
+#vg-splash .vg-hint{ margin-top:24px; display:flex; gap:18px; align-items:center; justify-content:center;
+  color:#9b86c8; font-weight:700; font-size:13px; }
+#vg-splash .vg-key{ font-weight:800; min-width:26px; height:26px; padding:0 8px; display:inline-grid;
+  place-items:center; white-space:nowrap; background:rgba(255,255,255,.92); color:#1c1024; border-radius:7px;
+  box-shadow:0 2px 0 rgba(0,0,0,.45); font-size:12px; margin-right:6px; }
+#vg-splash .vg-credit{ position:absolute; bottom:22px; left:0; right:0; text-align:center;
+  color:#9b86c8; font-size:12px; font-weight:600; letter-spacing:.06em; }
+#vg-splash .vg-credit b{ color:#cdbbf2; }

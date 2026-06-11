@@ -4,16 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Loop World Tour — Viking Gauchos on a Vespa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="splash.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- ================= SPLASH (intro screen) ================= -->
+<div id="vg-splash" data-screen-label="Splash">
+  <div class="vg-stars" id="vg-stars"></div>
+  <div class="vg-nebula"></div>
+  <div class="vg-vignette"></div>
+  <div class="vg-inner">
+    <div class="vg-crest"><img src="assets/logo-ivory.png" alt="Viking Gauchos on a Vespa"></div>
+    <div class="vg-eyebrow">Loop Hackathon 2026</div>
+    <h1>Loop World Tour</h1>
+    <p class="vg-tag">Where Northern might meets Southern grit — cruising at <b>30 MPH</b>. Warp the Vespa across four regions and break the final seal.</p>
+    <button class="vg-cta" id="vg-enter">Enter the Warp Room ›</button>
+    <div class="vg-hint"><span><span class="vg-key">Enter</span>warp</span><span><span class="vg-key">W A S D</span>drive</span></div>
+  </div>
+  <div class="vg-credit">A <b>Viking Gauchos on a Vespa</b> joint · ride at your own risk 🛵</div>
+</div>
 
 <div class="loading" id="loading">ENTERING THE WARP ROOM…<small>drag-free 3D — give it a second to build</small></div>
 
 <div id="app"></div>
 
 <!-- ================= MENU HUD (Warp Room) ================= -->
-<div class="hud" id="hud-menu">
+<div class="hud" id="hud-menu" data-screen-label="Warp Room">
   <div class="title"><b>Warp Room</b><span>Loop World Tour · 3D Hub</span></div>
 
   <div class="prog"><b id="prog-count">0 / 3</b><span>regions cleared</span></div>
@@ -39,7 +59,7 @@
 
   <div class="blueprint" id="blueprint">
     <h3>Scene Blueprint</h3>
-    <p>A playable Crash-Warped-style hub: one circular stone room, four portal levels selected by physically driving onto pressure pads.</p>
+    <p>A playable Crash-Warped-style hub: one circular stone room, four portal levels selected by physically driving onto pressure pads. Each portal now wears a <b>travel-poster billboard</b> with representative art for its region.</p>
 
     <h4>Game states</h4>
     <ul>
@@ -48,11 +68,13 @@
       <li>Cleared portals get a glowing green checkmark; each clear unlocks the next portal.</li>
     </ul>
 
-    <h4>Room architecture</h4>
+    <h4>Portal billboards (representative art)</h4>
     <ul>
-      <li>Circular arena, <span class="mono">R = 16u</span> wall, <span class="mono">H = 11u</span>, 12 chunky pilasters + capstones.</li>
-      <li>Tiered central <b>dais</b> (R 3.2u) with a glowing core — also a soft collision island.</li>
-      <li>Low-poly flat-shaded geometry, saturated stone palette, fog + starfield for warped-space sky.</li>
+      <li><b>Argentina</b> — the No. <b>10</b> shirt · <span class="mono">El Diez</span>.</li>
+      <li><b>Rome</b> — <span class="mono">S·P·Q·R</span> · the Eternal City.</li>
+      <li><b>Denmark</b> — Norse runes · Fjord &amp; Longship.</li>
+      <li><b>Sardegna</b> — <span class="mono">IV</span> · the Nuragic Colossus (boss).</li>
+      <li>Each billboard art panel is a swap-in placeholder — drop a real hero image to replace it.</li>
     </ul>
 
     <h4>Portals &amp; pads (4× at corners)</h4>
@@ -82,7 +104,7 @@
 </div>
 
 <!-- ================= RUN HUD (Argentina) ================= -->
-<div class="hud hidden" id="hud-run">
+<div class="hud hidden" id="hud-run" data-screen-label="Argentina Run">
   <div class="title"><b>Argentina</b><span>Scene 1 · Endless Pampas Run</span></div>
 
   <div class="scores">
@@ -111,7 +133,6 @@
 
   <div class="pop" id="pop"></div>
 
-  <!-- start gate -->
   <div class="card" id="start">
     <div class="panel">
       <div class="ey">Viking Gauchos on a Vespa</div>
@@ -126,7 +147,6 @@
     </div>
   </div>
 
-  <!-- game over -->
   <div class="card" id="over">
     <div class="panel">
       <div class="ey" id="over-ey">Wiped Out!</div>
@@ -144,7 +164,6 @@
     </div>
   </div>
 
-  <!-- level cleared celebration -->
   <div class="cleared" id="cleared">
     <div class="flag">
       <div class="band sky"></div>
@@ -167,5 +186,31 @@
 <script src="argentina/world1.js"></script>
 <script src="argentina/run3d.js"></script>
 <script src="main.js"></script>
+
+<script>
+/* ---- splash: starfield + dismiss to reveal the 3D warp room ---- */
+(function(){
+  var sky = document.getElementById('vg-stars');
+  if (sky){
+    var html = '';
+    for (var i=0;i<150;i++){
+      var s = Math.random()<0.85?1:(Math.random()<0.7?2:3);
+      html += '<i style="left:'+(Math.random()*100)+'%;top:'+(Math.random()*100)+'%;width:'+s+'px;height:'+s+'px;--d:'+(2+Math.random()*5)+'s;animation-delay:'+(Math.random()*4)+'s"></i>';
+    }
+    sky.innerHTML = html;
+  }
+  var splash = document.getElementById('vg-splash');
+  var dismissed = false;
+  function dismiss(){
+    if (dismissed) return; dismissed = true;
+    splash.classList.add('vg-hide');
+    setTimeout(function(){ splash.style.display = 'none'; }, 600);
+  }
+  document.getElementById('vg-enter').addEventListener('click', dismiss);
+  window.addEventListener('keydown', function(e){
+    if (!dismissed && (e.key === 'Enter' || e.key === ' ')) dismiss();
+  });
+})();
+</script>
 </body>
 </html>

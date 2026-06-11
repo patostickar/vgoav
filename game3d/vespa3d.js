@@ -1,20 +1,26 @@
 /* ============================================================
-   WARP ROOM — Low-poly Viking Gaucho on a green Vespa
-   Built from THREE primitives. Faces +Z. Returns refs for anim.
-   window.buildVespa(THREE) -> { group, tilt, wheelF, wheelR, headlight }
+   WARP ROOM — Viking Gaucho on a green Vespa (detailed low-poly)
+   Built from THREE primitives, styled after the team crest:
+   horned + nose-guard helmet, forked beard, fringed poncho,
+   classic rounded Vespa. Faces +Z. Returns refs for anim.
+   window.buildVespaWarp(THREE) -> group{ userData.refs:{ tilt, wheelF, wheelR, headlight } }
    ============================================================ */
 window.buildVespaWarp = function (THREE) {
   const C = {
-    green: 0x27b34a, greenD: 0x1b8838, chrome: 0xd7dde3, tire: 0x2a2a30,
-    hub: 0xc9ccd2, poncho: 0xc8542f, ponchoD: 0x9c3c20, skin: 0xe7b483,
-    beard: 0xe0a92e, steel: 0x9aa4b0, horn: 0xf2e6c8, seat: 0x5b3a1f,
-    light: 0xfff2a8,
+    green: 0x2bb24c, greenD: 0x1c8a3a, greenL: 0x49c866,
+    chrome: 0xdfe5ea, steel: 0x9aa4b0, dark: 0x2a2a30,
+    tire: 0x232227, hub: 0xccd0d6,
+    poncho: 0xc8542f, ponchoD: 0x9c3c20, ponchoBand: 0xf0e3c2, ponchoStripe: 0x6a2f18,
+    skin: 0xe3ab7d, skinD: 0xcf976a, beard: 0xe4ad33, beardD: 0xc89020,
+    helm: 0xaeb6c0, helmD: 0x6f7884, horn: 0xf2e6c8, hornD: 0xddcca4,
+    seat: 0x4a2f17, boot: 0x35200f, light: 0xfff2a8,
   };
-  const mat = (color, o = {}) =>
-    new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: true, roughness: 0.65, metalness: 0.08 }, o));
+  // smooth-shaded for rounded forms, flat for chunky accents
+  const smat = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: false, roughness: 0.6, metalness: 0.08 }, o));
+  const fmat = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: true, roughness: 0.7, metalness: 0.06 }, o));
 
   const group = new THREE.Group();
-  const tilt = new THREE.Group(); // lean / pitch / squash live here
+  const tilt = new THREE.Group();
   group.add(tilt);
 
   const add = (geo, m, x, y, z, parent = tilt) => {
@@ -25,73 +31,149 @@ window.buildVespaWarp = function (THREE) {
     return mesh;
   };
 
-  /* ---- wheels (spin around local X) ---- */
+  /* ============ wheels (spin around local X) ============ */
   function makeWheel() {
     const g = new THREE.Group();
-    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.32, 16), mat(C.tire, { roughness: 0.9 }));
-    tire.rotation.z = Math.PI / 2; tire.castShadow = true;
-    g.add(tire);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.36, 12), mat(C.hub, { metalness: 0.5, roughness: 0.3 }));
-    hub.rotation.z = Math.PI / 2; g.add(hub);
-    for (let i = 0; i < 3; i++) {
-      const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.5), mat(C.hub));
-      spoke.rotation.x = (i * Math.PI) / 3; g.add(spoke);
-    }
+    const tire = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.14, 12, 24), smat(C.tire, { roughness: 0.95 }));
+    tire.rotation.y = Math.PI / 2; tire.castShadow = true; g.add(tire);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.2, 18), smat(C.hub, { metalness: 0.5, roughness: 0.3 }));
+    rim.rotation.z = Math.PI / 2; g.add(rim);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), smat(C.chrome, { metalness: 0.7, roughness: 0.2 }));
+    cap.scale.set(0.6, 1, 1); cap.rotation.z = Math.PI / 2; g.add(cap);
     return g;
   }
-  const wheelR = makeWheel(); wheelR.position.set(0, 0.5, -0.86); tilt.add(wheelR);
-  const wheelF = makeWheel(); wheelF.position.set(0, 0.5, 0.92); tilt.add(wheelF);
+  const wheelR = makeWheel(); wheelR.position.set(0, 0.5, -0.92); tilt.add(wheelR);
+  const wheelF = makeWheel(); wheelF.position.set(0, 0.5, 0.96); tilt.add(wheelF);
 
-  /* ---- vespa body (green) ---- */
-  add(new THREE.BoxGeometry(0.92, 0.86, 1.06), mat(C.green), 0, 0.86, -0.5);      // rear cowl
-  add(new THREE.CylinderGeometry(0.5, 0.52, 1.04, 14), mat(C.greenD), 0, 0.88, -0.5).rotation.z = Math.PI / 2;
-  add(new THREE.BoxGeometry(0.8, 0.24, 1.5), mat(C.greenD), 0, 0.56, 0.05);        // floor deck
-  const shield = add(new THREE.BoxGeometry(0.86, 1.04, 0.34), mat(C.green), 0, 1.0, 0.92); // front leg shield
-  shield.rotation.x = -0.12;
-  add(new THREE.BoxGeometry(0.9, 0.34, 0.7), mat(C.green), 0, 0.62, 1.0);          // front fender top
-  // name plate
-  add(new THREE.BoxGeometry(0.5, 0.16, 0.04), mat(0xeafff0, { metalness: 0.3 }), 0, 0.95, -1.04);
-  // seat
-  add(new THREE.BoxGeometry(0.66, 0.2, 0.9), mat(C.seat, { roughness: 0.85 }), 0, 1.2, -0.32);
-  // handlebar
-  const stem = add(new THREE.CylinderGeometry(0.06, 0.06, 0.7, 8), mat(C.chrome, { metalness: 0.6, roughness: 0.3 }), 0, 1.55, 0.98);
-  stem.rotation.x = -0.2;
-  const bar = add(new THREE.CylinderGeometry(0.05, 0.05, 0.84, 8), mat(C.chrome, { metalness: 0.6, roughness: 0.3 }), 0, 1.78, 0.9);
+  /* ============ vespa body (rounded monocoque) ============ */
+  // rear teardrop body / side cowls
+  const bodyProfile = [
+    new THREE.Vector2(0.02, 0.0), new THREE.Vector2(0.5, 0.04), new THREE.Vector2(0.62, 0.34),
+    new THREE.Vector2(0.6, 0.66), new THREE.Vector2(0.44, 0.92), new THREE.Vector2(0.16, 1.04),
+    new THREE.Vector2(0.02, 1.06),
+  ];
+  const rearBody = add(new THREE.LatheGeometry(bodyProfile, 22), smat(C.green), 0, 0.5, -0.5);
+  rearBody.scale.set(1.0, 0.96, 1.18);
+  // side cowl bulges (the iconic Vespa "haunches")
+  [-1, 1].forEach((s) => {
+    const cowl = add(new THREE.SphereGeometry(0.46, 18, 14), smat(C.greenD), s * 0.34, 0.74, -0.5);
+    cowl.scale.set(0.62, 0.9, 1.12);
+  });
+  // engine pod under rear
+  add(new THREE.SphereGeometry(0.3, 14, 12), smat(C.greenD), 0.28, 0.42, -0.62).scale.set(1, 0.8, 1.2);
+  // floorboard
+  const deck = add(new THREE.BoxGeometry(0.74, 0.14, 1.46), smat(C.greenD), 0, 0.5, 0.05);
+  deck.geometry.translate(0, 0, 0);
+  add(new THREE.BoxGeometry(0.8, 0.06, 0.66), smat(C.dark, { roughness: 0.9 }), 0, 0.58, 0.18); // rubber mat
+  // front leg shield (curved panel)
+  const shieldProfile = [
+    new THREE.Vector2(0.02, 0.0), new THREE.Vector2(0.34, 0.02), new THREE.Vector2(0.42, 0.3),
+    new THREE.Vector2(0.4, 0.62), new THREE.Vector2(0.3, 0.82), new THREE.Vector2(0.02, 0.9),
+  ];
+  const shield = add(new THREE.LatheGeometry(shieldProfile, 20, 0, Math.PI), smat(C.green), 0, 0.66, 0.92);
+  shield.scale.set(1.05, 1.18, 0.5); shield.rotation.y = Math.PI / 2; shield.rotation.z = -0.06;
+  // chrome trim strip down the shield
+  add(new THREE.BoxGeometry(0.05, 0.86, 0.05), smat(C.chrome, { metalness: 0.7, roughness: 0.2 }), 0, 1.12, 1.04);
+  // front fender hugging the wheel
+  const fender = add(new THREE.TorusGeometry(0.5, 0.11, 10, 22, Math.PI * 0.95), smat(C.green), 0, 0.5, 0.96);
+  fender.rotation.y = Math.PI / 2; fender.rotation.z = Math.PI * 0.52;
+  add(new THREE.SphereGeometry(0.1, 10, 8), smat(C.chrome, { metalness: 0.6 }), 0, 0.86, 1.12); // fender crest
+  // seat (saddle)
+  const seat = add(new THREE.SphereGeometry(0.34, 16, 12), smat(C.seat, { roughness: 0.85, metalness: 0.05 }), 0, 1.12, -0.34);
+  seat.scale.set(0.86, 0.5, 1.25);
+  add(new THREE.TorusGeometry(0.16, 0.05, 8, 14), smat(C.seat), 0, 1.16, -0.66).rotation.x = Math.PI / 2; // rear pad lip
+  // handlebar column + bar + grips + mirror
+  const stem = add(new THREE.CylinderGeometry(0.07, 0.09, 0.74, 10), smat(C.steel, { metalness: 0.6, roughness: 0.3 }), 0, 1.36, 1.0);
+  stem.rotation.x = -0.16;
+  const headset = add(new THREE.SphereGeometry(0.17, 14, 10), smat(C.green), 0, 1.5, 1.04); headset.scale.set(1.1, 0.7, 1);
+  const bar = add(new THREE.CylinderGeometry(0.045, 0.045, 0.86, 10), smat(C.chrome, { metalness: 0.7, roughness: 0.2 }), 0, 1.62, 0.94);
   bar.rotation.z = Math.PI / 2;
-  // headlight (emissive)
-  const headlight = add(new THREE.SphereGeometry(0.16, 12, 10), mat(C.light, { emissive: C.light, emissiveIntensity: 0.9 }), 0, 1.3, 1.12);
+  [-1, 1].forEach((s) => add(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 10), smat(C.dark, { roughness: 0.9 }), s * 0.38, 1.62, 0.94).rotation.z = Math.PI / 2); // grips
+  const mstem = add(new THREE.CylinderGeometry(0.022, 0.022, 0.26, 6), smat(C.chrome, { metalness: 0.7 }), 0.4, 1.78, 0.92); mstem.rotation.z = 0.2;
+  add(new THREE.CircleGeometry(0.09, 16), smat(C.chrome, { metalness: 0.8, roughness: 0.15, side: THREE.DoubleSide }), 0.46, 1.9, 0.9).rotation.y = -0.3; // mirror
+  // round headlight on the shield
+  const headlight = add(new THREE.SphereGeometry(0.15, 14, 12), smat(C.light, { emissive: C.light, emissiveIntensity: 1.0, metalness: 0.2, roughness: 0.3 }), 0, 1.42, 1.12);
+  add(new THREE.TorusGeometry(0.15, 0.03, 8, 16), smat(C.chrome, { metalness: 0.7 }), 0, 1.42, 1.13);
+  // rear spare-wheel + nameplate
+  add(new THREE.CylinderGeometry(0.26, 0.26, 0.14, 16), smat(C.greenD), 0, 0.92, -1.08).rotation.x = Math.PI / 2;
+  add(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 12), smat(C.tire), 0, 0.92, -1.1).rotation.x = Math.PI / 2;
 
-  /* ---- rider: viking gaucho ---- */
-  add(new THREE.BoxGeometry(0.6, 0.5, 0.7), mat(C.seat), 0, 1.45, -0.2);            // hips
-  // legs forward to deck
-  const legL = add(new THREE.CylinderGeometry(0.13, 0.13, 0.8, 8), mat(C.seat), 0.22, 1.2, 0.35); legL.rotation.x = 0.9;
-  const legR = add(new THREE.CylinderGeometry(0.13, 0.13, 0.8, 8), mat(C.seat), -0.22, 1.2, 0.35); legR.rotation.x = 0.9;
-  // boots
-  add(new THREE.BoxGeometry(0.2, 0.18, 0.34), mat(0x3a2410), 0.22, 0.78, 0.62);
-  add(new THREE.BoxGeometry(0.2, 0.18, 0.34), mat(0x3a2410), -0.22, 0.78, 0.62);
-  // torso (lean forward)
-  const torso = add(new THREE.BoxGeometry(0.72, 0.78, 0.5), mat(C.poncho), 0, 2.0, -0.02);
-  torso.rotation.x = 0.22;
-  // poncho drape (flattened cone)
-  const poncho = add(new THREE.ConeGeometry(0.66, 0.7, 8), mat(C.ponchoD), 0, 1.92, -0.06);
-  poncho.scale.set(1, 1, 0.7);
-  // cape flap behind
-  const cape = add(new THREE.BoxGeometry(0.62, 0.6, 0.12), mat(C.ponchoD), 0, 1.85, -0.4);
-  cape.rotation.x = -0.35;
-  // arms to handlebar
-  const armL = add(new THREE.CylinderGeometry(0.1, 0.1, 0.95, 8), mat(C.poncho), 0.3, 2.0, 0.45); armL.rotation.x = 1.05;
-  const armR = add(new THREE.CylinderGeometry(0.1, 0.1, 0.95, 8), mat(C.poncho), -0.3, 2.0, 0.45); armR.rotation.x = 1.05;
-  // head
-  add(new THREE.SphereGeometry(0.32, 14, 12), mat(C.skin), 0, 2.62, 0.12);
-  // beard (cone down)
-  const beard = add(new THREE.ConeGeometry(0.3, 0.5, 10), mat(C.beard), 0, 2.42, 0.26); beard.rotation.x = Math.PI;
-  // helmet dome
-  const helm = add(new THREE.SphereGeometry(0.34, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.steel, { metalness: 0.5, roughness: 0.4 }), 0, 2.7, 0.1);
-  add(new THREE.TorusGeometry(0.33, 0.06, 8, 16), mat(0x6f7884, { metalness: 0.5 }), 0, 2.72, 0.1).rotation.x = Math.PI / 2;
-  // horns
-  const hornL = add(new THREE.ConeGeometry(0.1, 0.5, 8), mat(C.horn), 0.34, 2.95, 0.08); hornL.rotation.z = -0.7; hornL.rotation.x = -0.2;
-  const hornR = add(new THREE.ConeGeometry(0.1, 0.5, 8), mat(C.horn), -0.34, 2.95, 0.08); hornR.rotation.z = 0.7; hornR.rotation.x = -0.2;
+  /* ============ rider: the Viking Gaucho ============ */
+  const rider = new THREE.Group(); tilt.add(rider);
+  const radd = (geo, m, x, y, z) => add(geo, m, x, y, z, rider);
 
-  group.userData.refs = { tilt, wheelF, wheelR, headlight };
+  // hips / pants
+  radd(new THREE.SphereGeometry(0.34, 16, 12), smat(C.boot), 0, 1.4, -0.16).scale.set(1.1, 0.8, 1.0);
+  // thighs + shins to the floorboard
+  [-1, 1].forEach((s) => {
+    const thigh = radd(new THREE.CylinderGeometry(0.15, 0.13, 0.62, 10), smat(C.boot), s * 0.22, 1.2, 0.16); thigh.rotation.x = 0.95;
+    const shin = radd(new THREE.CylinderGeometry(0.12, 0.1, 0.56, 10), smat(C.boot), s * 0.24, 0.92, 0.5); shin.rotation.x = 0.5;
+    radd(new THREE.SphereGeometry(0.13, 10, 8), smat(C.boot), s * 0.24, 1.05, 0.42); // knee
+    const boot = radd(new THREE.BoxGeometry(0.2, 0.18, 0.4), fmat(C.boot), s * 0.24, 0.74, 0.66); boot.geometry.translate(0, 0, 0.04);
+    radd(new THREE.BoxGeometry(0.22, 0.08, 0.18), fmat(C.dark), s * 0.24, 0.66, 0.56); // heel
+  });
+
+  // torso under the poncho (so the neckline isn't hollow)
+  radd(new THREE.CylinderGeometry(0.26, 0.3, 0.7, 12), smat(C.ponchoD), 0, 1.92, -0.04).rotation.x = 0.18;
+
+  // PONCHO — layered + fringed + woven stripe
+  const poncho1 = radd(new THREE.ConeGeometry(0.76, 0.92, 12), fmat(C.poncho), 0, 1.84, -0.04);
+  poncho1.scale.set(1.0, 1.0, 0.82); poncho1.rotation.x = 0.05;
+  const poncho2 = radd(new THREE.ConeGeometry(0.82, 0.5, 12), fmat(C.ponchoD), 0, 1.55, -0.04); // lower layer / hem
+  poncho2.scale.set(1.0, 1.0, 0.82);
+  // woven stripe bands
+  add(new THREE.TorusGeometry(0.6, 0.05, 8, 16), fmat(C.ponchoBand), 0, 1.62, -0.04, rider).scale.set(1.0, 1.0, 0.82);
+  add(new THREE.TorusGeometry(0.66, 0.035, 8, 16), fmat(C.ponchoStripe), 0, 1.55, -0.04, rider).scale.set(1.0, 1.0, 0.82);
+  // fringe around the hem
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const fr = radd(new THREE.ConeGeometry(0.03, 0.16, 5), fmat(C.ponchoBand), Math.sin(a) * 0.78, 1.34, -0.04 + Math.cos(a) * 0.62);
+    fr.rotation.x = Math.PI;
+  }
+  // shoulders cap
+  radd(new THREE.SphereGeometry(0.42, 16, 12), fmat(C.poncho), 0, 2.1, -0.02).scale.set(1.0, 0.62, 0.9);
+
+  // arms (poncho sleeves) reaching to the grips, with hands
+  [-1, 1].forEach((s) => {
+    const upper = radd(new THREE.CylinderGeometry(0.12, 0.1, 0.6, 10), fmat(C.poncho), s * 0.36, 2.0, 0.18); upper.rotation.x = 0.8; upper.rotation.z = s * 0.18;
+    const fore = radd(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 10), smat(C.skin), s * 0.42, 1.74, 0.62); fore.rotation.x = 1.15; fore.rotation.z = s * 0.1;
+    radd(new THREE.SphereGeometry(0.1, 10, 8), smat(C.skinD), s * 0.4, 1.62, 0.92); // hand on grip
+  });
+
+  // neck + head
+  radd(new THREE.CylinderGeometry(0.13, 0.16, 0.2, 10), smat(C.skin), 0, 2.4, 0.06);
+  const head = radd(new THREE.SphereGeometry(0.32, 18, 14), smat(C.skin), 0, 2.62, 0.1);
+  head.scale.set(0.96, 1.04, 1.0);
+  radd(new THREE.ConeGeometry(0.07, 0.16, 8), smat(C.skinD), 0, 2.6, 0.42).rotation.x = Math.PI / 2; // nose
+  [-1, 1].forEach((s) => radd(new THREE.SphereGeometry(0.035, 8, 8), smat(C.dark), s * 0.12, 2.68, 0.34)); // eyes
+
+  // BEARD — full, forked, with mustache
+  const beard = radd(new THREE.ConeGeometry(0.3, 0.46, 12), fmat(C.beard), 0, 2.42, 0.24); beard.rotation.x = Math.PI - 0.12; beard.scale.set(1.0, 1.0, 0.85);
+  radd(new THREE.SphereGeometry(0.26, 14, 12), fmat(C.beard), 0, 2.5, 0.18).scale.set(1.05, 0.9, 0.9); // cheeks mass
+  [-1, 1].forEach((s) => { const fork = radd(new THREE.ConeGeometry(0.08, 0.26, 7), fmat(C.beardD), s * 0.1, 2.18, 0.28); fork.rotation.x = Math.PI - 0.1; }); // forked tips
+  [-1, 1].forEach((s) => { const mus = radd(new THREE.CylinderGeometry(0.05, 0.03, 0.2, 7), fmat(C.beard), s * 0.12, 2.55, 0.34); mus.rotation.z = s * 0.9; mus.rotation.x = 0.3; }); // mustache
+
+  // HELMET — dome + brow band + rivets + nose guard + curved horns
+  const helm = radd(new THREE.SphereGeometry(0.35, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), smat(C.helm, { metalness: 0.55, roughness: 0.35 }), 0, 2.74, 0.08);
+  helm.scale.set(1.0, 1.05, 1.0);
+  add(new THREE.TorusGeometry(0.345, 0.06, 10, 20), smat(C.helmD, { metalness: 0.55, roughness: 0.35 }), 0, 2.76, 0.08, rider).rotation.x = Math.PI / 2; // brow band
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; radd(new THREE.SphereGeometry(0.028, 8, 8), smat(C.chrome, { metalness: 0.7 }), Math.sin(a) * 0.345, 2.76, 0.08 + Math.cos(a) * 0.345); } // rivets
+  add(new THREE.BoxGeometry(0.1, 0.34, 0.07), smat(C.helmD, { metalness: 0.5 }), 0, 2.66, 0.4, rider).rotation.x = -0.12; // nose guard
+  // curved horns — anchored to the helmet side, curling up and out
+  [-1, 1].forEach((s) => {
+    const hg = new THREE.Group();
+    hg.position.set(s * 0.26, 2.82, 0.06);
+    hg.rotation.z = -s * 0.45; hg.rotation.x = -0.1;
+    rider.add(hg);
+    const seg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 0.3, 10), smat(C.horn));
+    seg1.position.y = 0.14; seg1.castShadow = true; hg.add(seg1);
+    const k = new THREE.Group(); k.position.y = 0.28; k.rotation.z = -s * 0.6; k.rotation.x = -0.28; hg.add(k);
+    const seg2 = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.42, 10), smat(C.hornD));
+    seg2.position.y = 0.21; seg2.castShadow = true; k.add(seg2);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 8, 14), smat(C.hornD, { metalness: 0.4 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.02; hg.add(ring);
+  });
+
+  group.userData.refs = { tilt, wheelF, wheelR, headlight, rider };
   return group;
 };

@@ -6,14 +6,107 @@
 
 window.WARP_LEVELS = [
   { id:"argentina", name:"Argentina", mode:"Endless Pampas Run",
-    color:0xf2b705, glow:0xffd24a, accent:0xc75b39, angle: Math.PI * 0.25, boss:false },
+    color:0xf2b705, glow:0xffd24a, accent:0xc75b39, angle: Math.PI * 0.25, boss:false,
+    poster:{ emblem:"10", subject:"EL DIEZ", kicker:"VISIT",
+      sky:"#74acdf", sky2:"#9cc4e8", band:"#ffffff", ink:"#1b3a5c", note:"e.g. Maradona", file:"argentina" } },
   { id:"rome", name:"Rome", mode:"City Traffic Dash",
-    color:0xe4d2a4, glow:0xff5a3c, accent:0xb3261e, angle: Math.PI * 1.75, boss:false },
+    color:0xe4d2a4, glow:0xff5a3c, accent:0xb3261e, angle: Math.PI * 1.75, boss:false,
+    poster:{ emblem:"S·P·Q·R", subject:"THE ETERNAL CITY", kicker:"VISIT",
+      sky:"#c0392b", sky2:"#e85a3c", band:"#f6c453", ink:"#4a120c", note:"e.g. Colosseum", file:"rome" } },
   { id:"denmark", name:"Denmark", mode:"Viking Fjord Hop",
-    color:0x2e9fd6, glow:0x00dcff, accent:0x2e6fb0, angle: Math.PI * 0.75, boss:false },
+    color:0x2e9fd6, glow:0x00dcff, accent:0x2e6fb0, angle: Math.PI * 0.75, boss:false,
+    poster:{ emblem:"ᚠᚢᚦ", subject:"FJORD & LONGSHIP", kicker:"VISIT",
+      sky:"#1f6f9c", sky2:"#34a9d6", band:"#bdecff", ink:"#06283a", note:"e.g. Longship", file:"denmark" } },
   { id:"sardegna", name:"Sardegna", mode:"BOSS · The Nuragic Colossus",
-    color:0xe0331f, glow:0xf68d2e, accent:0x8a8275, angle: Math.PI * 1.25, boss:true },
+    color:0xe0331f, glow:0xf68d2e, accent:0x8a8275, angle: Math.PI * 1.25, boss:true,
+    poster:{ emblem:"IV", subject:"THE NURAGIC COLOSSUS", kicker:"BOSS",
+      sky:"#8a1410", sky2:"#c0291c", band:"#f68d2e", ink:"#2a0805", note:"e.g. boss art", file:"sardegna" } },
 ];
+
+/* representative travel-poster texture for each portal (replaces the old coin emblem).
+   Pass a loaded HTMLImageElement as `img` to fill the art window with real drop-in art;
+   omit it and a themed emblem placeholder is drawn instead. */
+window.makePosterCanvas = function (P, name, mode, existing, img) {
+  const W = 880, H = 520, c = existing || document.createElement("canvas");
+  c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  x.clearRect(0, 0, W, H);
+  const rr = (a, b, w, h, r) => {
+    x.beginPath();
+    x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r);
+    x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath();
+  };
+  // base field
+  const g = x.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.sky2); g.addColorStop(1, P.sky);
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  // kicker ribbon
+  x.fillStyle = P.ink; x.fillRect(0, 0, W, 70);
+  x.fillStyle = P.band; x.textAlign = "center"; x.textBaseline = "middle";
+  x.font = "700 30px 'Baloo 2', system-ui, sans-serif";
+  x.fillText(P.kicker + "  ·  LOOP WORLD TOUR", W / 2, 36);
+
+  // central art window
+  const wx = 46, wy = 92, ww = W - 92, wh = 304, rad = 22;
+  x.save(); rr(wx, wy, ww, wh, rad); x.clip();
+  if (img && img.width) {
+    // cover-fit the real drop-in image
+    const ir = img.width / img.height, wr = ww / wh; let dw, dh, dx, dy;
+    if (ir > wr) { dh = wh; dw = wh * ir; dx = wx - (dw - ww) / 2; dy = wy; }
+    else { dw = ww; dh = ww / ir; dx = wx; dy = wy - (dh - wh) / 2; }
+    x.drawImage(img, dx, dy, dw, dh);
+    // subject caption strip over the photo
+    x.fillStyle = "rgba(0,0,0,.42)"; x.fillRect(wx, wy + wh - 54, ww, 54);
+    x.fillStyle = "#fff"; x.font = "800 26px 'Baloo 2', system-ui, sans-serif";
+    x.fillText(P.subject, W / 2, wy + wh - 26);
+  } else {
+    // themed placeholder: sun-rays + emblem disc + drop-art hint
+    const gg = x.createLinearGradient(0, wy, 0, wy + wh);
+    gg.addColorStop(0, P.sky2); gg.addColorStop(1, P.sky); x.fillStyle = gg; x.fillRect(wx, wy, ww, wh);
+    x.save(); x.translate(W / 2, wy + wh * 0.44); x.globalAlpha = 0.16;
+    for (let i = 0; i < 24; i++) {
+      x.rotate((Math.PI * 2) / 24); x.fillStyle = i % 2 ? P.band : P.ink;
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(40, -640); x.lineTo(-40, -640); x.closePath(); x.fill();
+    }
+    x.restore();
+    x.beginPath(); x.arc(W / 2, wy + wh * 0.42, 96, 0, Math.PI * 2); x.fillStyle = P.band; x.fill();
+    x.lineWidth = 8; x.strokeStyle = P.ink; x.stroke();
+    x.fillStyle = P.ink; x.font = "400 96px 'Luckiest Guy', 'Baloo 2', sans-serif";
+    x.fillText(P.emblem, W / 2, wy + wh * 0.42 + 4);
+    x.fillStyle = "#fff"; x.font = "800 24px 'Baloo 2', system-ui, sans-serif";
+    x.fillText(P.subject, W / 2, wy + wh - 46);
+    x.fillStyle = "rgba(255,255,255,.62)"; x.font = "600 16px ui-monospace, monospace";
+    x.fillText("▢ drop art → assets/posters/" + P.file + ".jpg  (" + P.note + ")", W / 2, wy + wh - 18);
+  }
+  x.restore();
+  // window frame
+  rr(wx, wy, ww, wh, rad); x.lineWidth = 8; x.strokeStyle = P.band; x.stroke();
+
+  // country name plaque
+  x.fillStyle = P.ink; x.fillRect(0, H - 96, W, 96);
+  x.fillStyle = "#fff"; x.textBaseline = "middle"; x.textAlign = "center";
+  x.font = "400 72px 'Luckiest Guy', 'Baloo 2', sans-serif";
+  x.fillText(name.toUpperCase(), W / 2, H - 48);
+  // mode caption on the ribbon
+  x.fillStyle = "rgba(255,255,255,.6)"; x.textAlign = "right"; x.textBaseline = "middle";
+  x.font = "600 16px ui-monospace, monospace"; x.fillText(mode, W - 22, 36);
+  // outer frame
+  x.strokeStyle = P.band; x.lineWidth = 16; x.strokeRect(8, 8, W - 16, H - 16);
+  x.strokeStyle = P.ink; x.lineWidth = 4; x.strokeRect(22, 22, W - 44, H - 44);
+  return c;
+};
+
+/* try a list of urls in order, call ok(img) with the first that loads */
+window.loadFirstImage = function (urls, ok) {
+  let i = 0;
+  (function next() {
+    if (i >= urls.length) return;
+    const im = new Image();
+    im.onload = function () { if (im.width) ok(im); };
+    im.onerror = function () { i++; next(); };
+    im.src = urls[i];
+  })();
+};
 
 window.buildRoom = function (THREE, scene) {
   const mat = (color, o = {}) =>
@@ -91,7 +184,7 @@ window.buildRoom = function (THREE, scene) {
   }
 
   /* ---- portals + pressure pads ---- */
-  const pads = [], portals = [];
+  const pads = [], portals = [], posters = [];
   let bossRefs = null;
 
   WARP_LEVELS.forEach((L) => {
@@ -111,8 +204,34 @@ window.buildRoom = function (THREE, scene) {
     pg.add(frame);
     // keystone + side blocks
     const key = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), mat(STONE_L)); key.position.set(0, 2.7, 0.1); key.rotation.z = Math.PI / 4; pg.add(key);
-    // colored emblem above
-    const emblem = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.2, 8), emis(L.color, 0.8)); emblem.rotation.x = Math.PI / 2; emblem.position.set(0, 3.5, 0.2); pg.add(emblem);
+
+    // representative travel-poster billboard mounted over the door (replaces the old coin emblem)
+    const PB = L.poster;
+    const pcv = window.makePosterCanvas(PB, L.name, L.mode);
+    const ptex = new THREE.CanvasTexture(pcv); ptex.anisotropy = 8;
+    const PW = 4.8, PH = PW * (pcv.height / pcv.width);
+    const posterTrim = new THREE.Mesh(new THREE.BoxGeometry(PW + 0.46, PH + 0.46, 0.34), emis(L.glow, 0.55));
+    posterTrim.position.set(0, 4.7, 0.30); pg.add(posterTrim);
+    const posterFrame = new THREE.Mesh(new THREE.BoxGeometry(PW + 0.26, PH + 0.26, 0.42), mat(0x5b3a1f));
+    posterFrame.position.set(0, 4.7, 0.34); pg.add(posterFrame);
+    const poster = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH),
+      new THREE.MeshBasicMaterial({ map: ptex, toneMapped: false }));
+    poster.position.set(0, 4.7, 0.57); pg.add(poster);
+    // little bracket posts joining the sign to the arch
+    [-1, 1].forEach((s) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.0, 0.18), mat(0x5b3a1f));
+      post.position.set(s * 1.6, 3.35, 0.34); pg.add(post);
+    });
+    posters.push({ canvas: pcv, tex: ptex, P: PB, name: L.name, mode: L.mode, img: null });
+    // load real drop-in art if present (assets/posters/<id>.{jpg,png,jpeg,webp})
+    (function (rec) {
+      const base = "assets/posters/" + rec.P.file;
+      window.loadFirstImage([base + ".jpg", base + ".png", base + ".jpeg", base + ".webp"], function (im) {
+        rec.img = im;
+        window.makePosterCanvas(rec.P, rec.name, rec.mode, rec.canvas, rec.img);
+        rec.tex.needsUpdate = true;
+      });
+    })(posters[posters.length - 1]);
 
     // swirling portal surface
     const portal = new THREE.Mesh(new THREE.CircleGeometry(2.15, 32),
@@ -172,6 +291,16 @@ window.buildRoom = function (THREE, scene) {
     portals.push({ level: L, group: pg, portal, swirl, light: portalLight });
   });
 
+  /* redraw poster textures once the display fonts have loaded */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      posters.forEach((p) => {
+        window.makePosterCanvas(p.P, p.name, p.mode, p.canvas, p.img);
+        p.tex.needsUpdate = true;
+      });
+    });
+  }
+
   /* ---- warped-space backdrop ---- */
   scene.background = new THREE.Color(0x190a36);
   scene.fog = new THREE.Fog(0x190a36, 28, 60);
@@ -198,5 +327,5 @@ window.buildRoom = function (THREE, scene) {
     requestAnimationFrame(fall);
   }
 
-  return { room, pads, portals, dais, core, coreRing, stars, torchFlames, bossRefs, unlockBoss };
+  return { room, pads, portals, posters, dais, core, coreRing, stars, torchFlames, bossRefs, unlockBoss };
 };
