@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "argentina",
+      "name": "game",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8741", "--directory", "argentina"],
+      "runtimeArgs": ["-m", "http.server", "8741"],
       "port": 8741
     }
   ]

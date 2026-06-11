@@ -1,21 +1,16 @@
 /* ============================================================
-   ARGENTINA WORLD — Endless Run controller (Three.js)
+   ARGENTINA WORLD — Endless Run scene module (Three.js)
+   window.createArgentinaRun(THREE, env) -> { scene, camera, update, enter, exit }
    3-lane runner: A/D (or ←/→) snap lanes, Space jumps.
-   Procedural crates (smashable) + boulders (deadly) approach;
-   collect mangos; live distance/score; crash -> restart.
+   Win at WIN_SCORE points -> LEVEL CLEARED -> back to the Warp Room.
+   TNT death -> "GO HOME!" card with Return to Warp Room.
+   env: {
+     dom,                  // renderer canvas (pointer events)
+     exitToMenu(cleared),  // hand control back to the Warp Room
+   }
    ============================================================ */
-(function () {
-  "use strict";
-  const THREE = window.THREE;
-  const host = document.getElementById("app");
-
-  /* ---- renderer / scene / camera ---- */
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  host.appendChild(renderer.domElement);
+window.createArgentinaRun = function (THREE, env) {
+  let active = false;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 220);
@@ -34,7 +29,7 @@
   /* ---- world + rider ---- */
   const W = window.buildWorld1(THREE, scene);
   const LANE = W.laneX, FAR = W.FAR, BEHIND = W.BEHIND, SPAN = W.SPAN;
-  const vespa = window.buildVespa(THREE);
+  const vespa = window.buildVespaRun(THREE);
   scene.add(vespa);
   const VR = vespa.userData.refs;
 
@@ -68,9 +63,13 @@
   const elBest = document.getElementById("best");
   const startCard = document.getElementById("start");
   const overCard = document.getElementById("over");
+  const overEy = document.getElementById("over-ey");
+  const overTitle = document.getElementById("over-title");
   const overDist = document.getElementById("over-dist");
   const overMango = document.getElementById("over-mango");
+  const overScore = document.getElementById("over-score");
   const overBest = document.getElementById("over-best");
+  const clearedBanner = document.getElementById("cleared");
   const flash = document.getElementById("flash");
   const popEl = document.getElementById("pop");
 
@@ -85,24 +84,25 @@
   const JUMP = 30, G_RISE = 110, G_FALL = 150;
   const CLEAR_CRATE = 1.1; // min car.y to clear a crate
   const AKU_MAX = 2;
-  let state = "ready"; // ready | run | dead
+  const WIN_SCORE = 500;   // reach this -> LEVEL CLEARED
+  let state = "ready"; // ready | run | dead | cleared
   let lane = 1, car = { x: LANE[1], y: 0, vy: 0, grounded: true };
   let speed = BASE_SPEED, distance = 0, mangoCount = 0, score = 0, akuPoints = 0;
+  let distSinceSpawn = 0, nextGap = 13, prevOpen = [0, 1, 2];
+  let lean = 0, hopTilt = 0, shake = 0, deadT = 0, clearT = 0;
 
   /* hovering Aku Aku shield masks trailing the vespa */
   const akuMasks = [W.makeAkuMask(), W.makeAkuMask()];
   akuMasks.forEach((m) => { m.visible = false; scene.add(m); });
   function updateAkuMasks(t) {
     akuMasks.forEach((m, i) => {
-      m.visible = state !== "dead" && i < akuPoints;
+      m.visible = active && state !== "dead" && i < akuPoints;
       if (!m.visible) return;
       const side = i === 0 ? 1 : -1;
       m.position.set(car.x + side * 1.1, car.y + 2.3 + Math.sin(t * 3 + i * 2) * 0.18, -1.6);
       m.rotation.y = Math.sin(t * 2 + i) * 0.25;
     });
   }
-  let distSinceSpawn = 0, nextGap = 13, prevOpen = [0, 1, 2];
-  let lean = 0, hopTilt = 0, shake = 0, deadT = 0;
 
   function reset() {
     obstacles.forEach((o) => POOLS[o.type].release(o.group));
@@ -112,7 +112,7 @@
     lane = 1; car.x = LANE[1]; car.y = 0; car.vy = 0; car.grounded = true;
     speed = BASE_SPEED; distance = 0; mangoCount = 0; score = 0; akuPoints = 0;
     distSinceSpawn = 0; nextGap = 16; prevOpen = [0, 1, 2];
-    lean = 0; hopTilt = 0; shake = 0; deadT = 0;
+    lean = 0; hopTilt = 0; shake = 0; deadT = 0; clearT = 0;
     vespa.rotation.set(0, 0, 0); VR.tilt.rotation.set(0, 0, 0); VR.tilt.scale.set(1, 1, 1);
     updateHUD();
   }
@@ -136,31 +136,35 @@
   function startRun() {
     if (state === "run") return;
     reset(); state = "run";
-    startCard.classList.add("hide"); overCard.classList.remove("show");
+    startCard.classList.add("hide"); startCard.classList.remove("show");
+    overCard.classList.remove("show");
   }
-  const down = (e) => {
+  window.addEventListener("keydown", (e) => {
+    if (!active) return;
     const k = e.key.toLowerCase();
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
     if (state === "ready") { if (k === " " || k === "arrowup" || k === "w" || k === "enter") startRun(); return; }
     if (state === "dead") {
-      if (deadT > 0.6 && (k === " " || k === "r" || k === "enter")) startRun();
+      if (deadT > 0.6 && (k === "r" || k === "enter")) startRun();
       return;
     }
+    if (state === "cleared") return;
     // camera looks down +Z, so +X is screen-left: A/left => +1 lane, D/right => -1
     if (k === "a" || k === "arrowleft") moveLane(1);
     else if (k === "d" || k === "arrowright") moveLane(-1);
     else if (k === " " || k === "w" || k === "arrowup") jump();
-  };
-  window.addEventListener("keydown", down);
+  });
 
   // pointer / touch fallback: tap left|right third to switch, tap center to jump, swipe up to jump
   let tStart = null;
-  renderer.domElement.addEventListener("pointerdown", (e) => {
+  env.dom.addEventListener("pointerdown", (e) => {
+    if (!active) return;
     if (state === "ready") { startRun(); return; }
-    if (state === "dead") { if (deadT > 0.6) startRun(); return; }
+    if (state === "dead" || state === "cleared") return;
     tStart = { x: e.clientX, y: e.clientY, t: performance.now() };
   });
-  renderer.domElement.addEventListener("pointerup", (e) => {
+  env.dom.addEventListener("pointerup", (e) => {
+    if (!active) return;
     if (!tStart || state !== "run") { tStart = null; return; }
     const dx = e.clientX - tStart.x, dy = e.clientY - tStart.y;
     if (dy < -40 && Math.abs(dy) > Math.abs(dx)) jump();
@@ -171,6 +175,12 @@
     else if (dx < -30) moveLane(1);
     tStart = null;
   });
+
+  /* card buttons */
+  document.getElementById("start-btn").addEventListener("click", () => { if (active) startRun(); });
+  document.getElementById("retry-btn").addEventListener("click", () => { if (active && state === "dead") startRun(); });
+  document.getElementById("home-btn").addEventListener("click", () => { if (active) env.exitToMenu(false); });
+  document.getElementById("start-home-btn").addEventListener("click", () => { if (active) env.exitToMenu(false); });
 
   /* ---- spawning ---- */
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -232,7 +242,13 @@
     prevOpen = open;
   }
 
-  /* ---- smash / crash ---- */
+  /* ---- scoring / win ---- */
+  function addScore(n) {
+    score += n;
+    if (state === "run" && score >= WIN_SCORE) levelCleared();
+  }
+
+  /* ---- smash / crash / clear ---- */
   function debris(o, n) {
     const p = o.group.position;
     for (let i = 0; i < n; i++) {
@@ -248,14 +264,15 @@
     cratePool.release(o.group);
     mangoCount += 1; // crates drop a wumpa-style bonus
     shake = Math.max(shake, 0.18);
-    popText("SMASH! +1", "#ffd24a");
+    popText("SMASH! +25", "#ffd24a");
+    addScore(25);
   }
   function smashBasic(o) {
     debris(o, 8);
     basicPool.release(o.group);
-    score += 10;
     shake = Math.max(shake, 0.15);
     popText("+10", "#ffd24a");
+    addScore(10);
   }
   function collectAku(o) {
     debris(o, 6);
@@ -273,41 +290,50 @@
       popText("SHIELDED!", "#7fe0ff");
       return true; // survived — obstacle destroyed
     }
-    crash();
+    crash(o.type);
     return false;
   }
   let popT = 0;
   function popText(txt, color) {
     popEl.textContent = txt; popEl.style.color = color;
+    popEl.classList.remove("show"); void popEl.offsetWidth;
     popEl.classList.add("show"); popT = 0.7;
   }
 
-  function crash() {
+  function crash(cause) {
     if (state !== "run") return;
     state = "dead"; deadT = 0;
+    flash.style.setProperty("--c", "#ff3b2e");
     flash.classList.add("on"); setTimeout(() => flash.classList.remove("on"), 220);
     shake = 0.6; car.vy = 9;
     distance = Math.floor(distance);
     if (distance > best) { best = distance; try { localStorage.setItem(BESTKEY, String(best)); } catch (e) {} }
+    // cartoonish TNT-specific game over
+    if (cause === "tnt") { overEy.textContent = "KA-BOOM!"; overTitle.textContent = "GO HOME!"; }
+    else { overEy.textContent = "Wiped Out!"; overTitle.textContent = "Run Over"; }
     overDist.textContent = distance + " m";
     overMango.textContent = mangoCount;
-    document.getElementById("over-score").textContent = score;
+    overScore.textContent = score;
     overBest.textContent = best + " m";
     elBest.textContent = best + " m";
-    setTimeout(() => overCard.classList.add("show"), 480);
+    setTimeout(() => { if (state === "dead") overCard.classList.add("show"); }, 480);
+  }
+
+  function levelCleared() {
+    state = "cleared"; clearT = 0;
+    distance = Math.floor(distance);
+    if (distance > best) { best = distance; try { localStorage.setItem(BESTKEY, String(best)); } catch (e) {} }
+    clearedBanner.classList.add("show");
+    // celebrate, then hand back to the Warp Room with the level marked cleared
+    setTimeout(() => { if (active) env.exitToMenu(true); }, 2800);
   }
 
   /* ---- camera ---- */
   const camPos = new THREE.Vector3(0, 5.4, -9.2);
   const camLook = new THREE.Vector3(0, 1.4, 6);
 
-  /* ---- main loop ---- */
-  const clock = new THREE.Clock();
-  let _shown = false;
-  function tick() {
-    let dt = clock.getDelta(); if (dt > 0.05) dt = 0.05;
-    const t = clock.elapsedTime;
-
+  /* ---- per-frame update ---- */
+  function update(dt, t) {
     if (state === "run") {
       // speed ramps with distance
       speed = Math.min(MAX_SPEED, BASE_SPEED + distance * 0.014);
@@ -320,6 +346,7 @@
       }
       updateHUD();
     }
+    if (state === "cleared") clearT += dt;
 
     /* lane snap (frame-independent, snappy) */
     const targetX = LANE[lane];
@@ -361,8 +388,8 @@
       // obstacles
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const o = obstacles[i]; o.group.position.z -= move;
-        // collision check at the player plane
-        if (!o.hit && o.group.position.z <= 0.7 && o.group.position.z > -1.4 && o.lane === lane) {
+        // collision check at the player plane (only while racing)
+        if (state === "run" && !o.hit && o.group.position.z <= 0.7 && o.group.position.z > -1.4 && o.lane === lane) {
           o.hit = true;
           if (o.type === "cactus" || o.type === "tnt") {
             // jumpable with a clean apex; otherwise deadly unless shielded
@@ -390,9 +417,10 @@
         const m = mangos[i]; m.group.position.z -= move;
         m.group.rotation.y += dt * 2.4;
         m.group.position.y = m.baseY + Math.sin(t * 3 + m.phase) * 0.12;
-        if (!m.got && m.group.position.z <= 0.9 && m.group.position.z > -1.2 && m.lane === lane
+        if (state === "run" && !m.got && m.group.position.z <= 0.9 && m.group.position.z > -1.2 && m.lane === lane
           && Math.abs(car.y + 1.4 - m.group.position.y) < 1.5) {
-          m.got = true; mangoCount += 1; popText("MANGO +1", "#ffb01e");
+          m.got = true; mangoCount += 1; popText("MANGO +5", "#ffb01e");
+          addScore(5);
           mangoPool.release(m.group); mangos.splice(i, 1); continue;
         }
         if (m.group.position.z < BEHIND) { mangoPool.release(m.group); mangos.splice(i, 1); }
@@ -422,19 +450,27 @@
     camLook.lerp(new THREE.Vector3(car.x * 0.6, 1.5 + Math.min(car.y, 3) * 0.3, 7), 0.15);
     camera.position.copy(camPos);
     camera.lookAt(camLook);
-
-    renderer.render(scene, camera);
-    if (!_shown) { _shown = true; const l = document.getElementById("loading"); if (l) l.classList.add("hide"); }
-    requestAnimationFrame(tick);
   }
-  reset();
-  state = "ready";
-  tick();
 
-  /* ---- resize ---- */
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-})();
+  /* ---- enter / exit (state manager hooks) ---- */
+  function enter() {
+    active = true;
+    reset();
+    state = "ready";
+    camPos.set(0, 5.4, -9.2); camLook.set(0, 1.4, 6);
+    startCard.classList.remove("hide"); startCard.classList.add("show");
+    overCard.classList.remove("show");
+    clearedBanner.classList.remove("show");
+    elBest.textContent = best + " m";
+  }
+  function exit() {
+    active = false;
+    startCard.classList.remove("show"); startCard.classList.add("hide");
+    overCard.classList.remove("show");
+    clearedBanner.classList.remove("show");
+    akuMasks.forEach((m) => (m.visible = false));
+  }
+
+  reset();
+  return { scene, camera, update, enter, exit };
+};

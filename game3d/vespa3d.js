@@ -3,7 +3,7 @@
    Built from THREE primitives. Faces +Z. Returns refs for anim.
    window.buildVespa(THREE) -> { group, tilt, wheelF, wheelR, headlight }
    ============================================================ */
-window.buildVespa = function (THREE) {
+window.buildVespaWarp = function (THREE) {
   const C = {
     green: 0x27b34a, greenD: 0x1b8838, chrome: 0xd7dde3, tire: 0x2a2a30,
     hub: 0xc9ccd2, poncho: 0xc8542f, ponchoD: 0x9c3c20, skin: 0xe7b483,

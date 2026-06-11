@@ -1,20 +1,16 @@
 /* ============================================================
-   WARP ROOM — controller (Three.js)
+   WARP ROOM — scene module (Three.js)
+   window.createWarpRoom(THREE, env) -> { scene, camera, update, enter, exit }
    Drive the Vespa (steer + accelerate + jump), third-person chase
    cam, pressure-pad selection, ENTER to warp, boss padlock + unlock.
+   env: {
+     dom,                       // renderer canvas (pointer events)
+     enterLevel(id),            // ask the state manager to launch a level scene
+     progress: { list(), add(id) },  // shared cleared-levels store
+   }
    ============================================================ */
-(function () {
-  "use strict";
-  const THREE = window.THREE;
-  const host = document.getElementById("app");
-
-  /* ---- renderer / scene / camera ---- */
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  host.appendChild(renderer.domElement);
+window.createWarpRoom = function (THREE, env) {
+  let active = false;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
@@ -32,17 +28,45 @@
 
   /* ---- build world + character ---- */
   const refs = window.buildRoom(THREE, scene);
-  const vespa = window.buildVespa(THREE);
+  const vespa = window.buildVespaWarp(THREE);
   scene.add(vespa);
   const VR = vespa.userData.refs;
 
-  /* ---- progression ---- */
-  const SAVE = "warp_progress_v1";
-  let cleared = [];
-  try { const s = JSON.parse(localStorage.getItem(SAVE)); if (s && Array.isArray(s.cleared)) cleared = s.cleared; } catch (e) {}
+  /* ---- progression (shared with the state manager) ---- */
+  let cleared = env.progress.list();
   const bossUnlocked = () => ["argentina", "rome", "denmark"].every((id) => cleared.includes(id));
-  function saveProg() { try { localStorage.setItem(SAVE, JSON.stringify({ cleared })); } catch (e) {} }
-  if (bossUnlocked() && refs.bossRefs) refs.bossRefs.blk.visible = false;
+  // unlock chain: Argentina is open; each next region unlocks after the previous
+  function lockInfo(L) {
+    if (L.boss) return bossUnlocked() ? null : "&#128274; SEALED — clear all regions";
+    if (L.id === "rome" && !cleared.includes("argentina")) return "&#128274; LOCKED — clear Argentina first";
+    if (L.id === "denmark" && !cleared.includes("rome")) return "&#128274; LOCKED — clear Rome first";
+    return null;
+  }
+
+  /* ---- green checkmarks over cleared portals ---- */
+  const checkmarks = {};
+  refs.portals.forEach((p) => {
+    const g = new THREE.Group();
+    const m = new THREE.MeshStandardMaterial({ color: 0x27e36a, emissive: 0x27e36a, emissiveIntensity: 1.1, flatShading: true, roughness: 0.4 });
+    const shrt = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.42, 0.3), m);
+    shrt.position.set(-0.62, -0.28, 0); shrt.rotation.z = Math.PI / 4; g.add(shrt);
+    const lng = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.42, 0.3), m);
+    lng.position.set(0.35, 0, 0); lng.rotation.z = -Math.PI / 4; g.add(lng);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.14, 8, 24),
+      new THREE.MeshStandardMaterial({ color: 0xeafff0, emissive: 0x9dffc4, emissiveIntensity: 0.6, flatShading: true }));
+    g.add(ring);
+    g.position.set(0, 4.8, 0.6); // above the portal, in portal-group space
+    g.visible = false;
+    p.group.add(g);
+    checkmarks[p.level.id] = g;
+  });
+
+  function refresh() {
+    cleared = env.progress.list();
+    Object.keys(checkmarks).forEach((id) => { checkmarks[id].visible = cleared.includes(id); });
+    if (bossUnlocked() && refs.bossRefs) refs.bossRefs.blk.visible = false;
+    updateProg();
+  }
 
   /* ---- vehicle state ---- */
   const car = { x: 0, z: 6, y: 0, h: Math.PI, speed: 0, vy: 0, grounded: true };
@@ -51,15 +75,15 @@
 
   /* ---- input ---- */
   const keys = {};
-  const down = (e) => { keys[e.key.toLowerCase()] = true;
+  window.addEventListener("keydown", (e) => {
+    if (!active) return;
+    keys[e.key.toLowerCase()] = true;
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) e.preventDefault();
     if (e.key === "Enter") tryWarp();
     if (e.key.toLowerCase() === "v") toggleView();
     if (e.key.toLowerCase() === "b") toggleBlueprint();
-  };
-  const up = (e) => { keys[e.key.toLowerCase()] = false; };
-  window.addEventListener("keydown", down);
-  window.addEventListener("keyup", up);
+  });
+  window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 
   /* ---- HUD ---- */
   const hudName = document.getElementById("hud-name");
@@ -72,7 +96,6 @@
   let toastT;
   function toast(m) { toastEl.textContent = m; toastEl.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("show"), 1200); }
   function updateProg() { progEl.textContent = cleared.filter((c) => c !== "sardegna").length + " / 3"; }
-  updateProg();
 
   /* ---- selection ---- */
   let activePad = null;
@@ -92,14 +115,12 @@
       p.group.scale.y += (((on ? 0.55 : 1)) - p.group.scale.y) * 0.2;
     });
     if (activePad) {
-      const L = activePad.level, locked = L.boss && !bossUnlocked();
+      const L = activePad.level, lock = lockInfo(L);
       hudBanner.classList.add("show");
-      hudBanner.classList.toggle("locked", locked);
+      hudBanner.classList.toggle("locked", !!lock);
       hudName.textContent = L.name;
-      hudMode.textContent = L.mode;
-      hudPrompt.innerHTML = locked
-        ? "&#128274; SEALED — clear all regions"
-        : "Press <b>ENTER</b> to warp";
+      hudMode.textContent = cleared.includes(L.id) ? L.mode + " · CLEARED" : L.mode;
+      hudPrompt.innerHTML = lock || "Press <b>ENTER</b> to warp";
     } else {
       hudBanner.classList.remove("show");
     }
@@ -108,14 +129,31 @@
   let warping = false;
   function tryWarp() {
     if (!activePad || warping) return;
-    const L = activePad.level, locked = L.boss && !bossUnlocked();
-    if (locked) { rattleLock(); toast("SEALED!"); return; }
+    const L = activePad.level, lock = lockInfo(L);
+    if (lock) {
+      if (L.boss) rattleLock();
+      toast(L.boss ? "SEALED!" : "LOCKED!");
+      return;
+    }
+    if (L.id === "argentina") {
+      // real playable level — hand off to the state manager
+      warping = true;
+      toast("WARPING TO " + L.name.toUpperCase());
+      setTimeout(() => { warping = false; }, 600);
+      env.enterLevel("argentina");
+      return;
+    }
+    // rome / denmark have no scene yet: simulate the clear (placeholder behavior)
     warping = true;
     flash.style.setProperty("--c", "#" + L.glow.toString(16).padStart(6, "0"));
     flash.classList.add("on");
     toast("WARPING TO " + L.name.toUpperCase());
     setTimeout(() => {
-      if (!cleared.includes(L.id)) { cleared.push(L.id); saveProg(); updateProg(); if (bossUnlocked()) { refs.unlockBoss(); toast("SEAL BROKEN!"); } }
+      if (!cleared.includes(L.id)) {
+        env.progress.add(L.id);
+        refresh();
+        if (bossUnlocked()) { refs.unlockBoss(); toast("SEAL BROKEN!"); }
+      }
       flash.classList.remove("on");
       warping = false;
     }, 900);
@@ -135,13 +173,8 @@
   document.getElementById("bp-toggle").addEventListener("click", toggleBlueprint);
   document.getElementById("view-toggle").addEventListener("click", toggleView);
 
-  /* ---- loop ---- */
-  const clock = new THREE.Clock();
-  let _shown = false;
-  function tick() {
-    let dt = clock.getDelta(); if (dt > 0.05) dt = 0.05;
-    const t = clock.elapsedTime;
-
+  /* ---- per-frame update ---- */
+  function update(dt, t) {
     /* drive */
     const fwd = keys["arrowup"] || keys["w"], back = keys["arrowdown"] || keys["s"];
     const sl = keys["arrowleft"] || keys["a"], sr = keys["arrowright"] || keys["d"];
@@ -188,6 +221,12 @@
     refs.stars.rotation.y += dt * 0.01;
     refs.torchFlames.forEach((f, i) => { const s = 1 + Math.sin(t * 12 + i) * 0.18; f.flame.scale.set(s, 1 + Math.sin(t * 9 + i) * 0.22, s); f.fl.intensity = 0.9 + Math.sin(t * 14 + i * 2) * 0.3; });
 
+    /* checkmark idle bob */
+    Object.keys(checkmarks).forEach((id, i) => {
+      const c = checkmarks[id];
+      if (c.visible) { c.rotation.y = Math.sin(t * 1.4 + i) * 0.18; c.position.y = 4.8 + Math.sin(t * 2 + i) * 0.12; }
+    });
+
     /* camera */
     if (topView) {
       camPos.lerp(new THREE.Vector3(0.01, 40, 0.01), 0.08);
@@ -203,17 +242,24 @@
     }
     camera.position.copy(camPos);
     camera.lookAt(camLook);
-
-    renderer.render(scene, camera);
-    if (!_shown) { _shown = true; const l = document.getElementById("loading"); if (l) l.classList.add("hide"); }
-    requestAnimationFrame(tick);
   }
-  tick();
 
-  /* ---- resize ---- */
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-})();
+  /* ---- enter / exit (state manager hooks) ---- */
+  function enter() {
+    active = true;
+    // respawn at the center of the room (just off the dais), facing the camera
+    car.x = 0; car.z = 6; car.y = 0; car.h = Math.PI; car.speed = 0; car.vy = 0; car.grounded = true;
+    Object.keys(keys).forEach((k) => (keys[k] = false));
+    camPos.set(0, 6, 13); camLook.set(0, 1.6, 6);
+    topView = false; warping = false;
+    refresh();
+  }
+  function exit() {
+    active = false;
+    hudBanner.classList.remove("show");
+    Object.keys(keys).forEach((k) => (keys[k] = false));
+  }
+
+  refresh();
+  return { scene, camera, update, enter, exit };
+};

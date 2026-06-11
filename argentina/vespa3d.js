@@ -7,7 +7,7 @@
      refs.tilt   — lean / pitch / squash group (children of it get the english)
      refs.wheelF / refs.wheelR — spin around local X
    ============================================================ */
-window.buildVespa = function (THREE) {
+window.buildVespaRun = function (THREE) {
   const C = {
     blue: 0x2f63c8, blueD: 0x21489c, blueL: 0x5a8cea, cream: 0xf4ead2,
     chrome: 0xdfe5ec, tire: 0x222229, hub: 0xc9ccd2,
