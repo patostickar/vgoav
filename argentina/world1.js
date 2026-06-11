@@ -253,8 +253,10 @@ window.buildWorld1 = function (THREE, scene) {
     return g;
   }
 
-  // text-label canvas for a produce crate
+  // text-label canvas for a produce crate (cached per label string)
+  const _labelTexCache = {};
   function labelTex(text) {
+    if (_labelTexCache[text]) return _labelTexCache[text];
     const c = document.createElement("canvas"); c.width = 256; c.height = 150;
     const x = c.getContext("2d");
     // wood plaque
@@ -276,7 +278,9 @@ window.buildWorld1 = function (THREE, scene) {
       while (x.measureText(ln).width > 224 && fs > 14) { fs -= 2; x.font = "900 " + fs + "px 'Arial Black', Impact, sans-serif"; }
       x.fillText(ln, 128, 75 + (i - (lines.length - 1) / 2) * lh);
     });
-    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4;
+    _labelTexCache[text] = t;
+    return t;
   }
   const CRATE_LABELS = ["EMPANADAS", "DULCE DE LECHE"];
 
@@ -325,8 +329,10 @@ window.buildWorld1 = function (THREE, scene) {
     return g;
   }
 
-  // TNT text canvas
+  // TNT text canvas (cached)
+  let _tntTexCache = null;
   function tntTex() {
+    if (_tntTexCache) return _tntTexCache;
     const c = document.createElement("canvas"); c.width = c.height = 128;
     const x = c.getContext("2d");
     x.fillStyle = "#d8281e"; x.fillRect(0, 0, 128, 128);
@@ -334,7 +340,9 @@ window.buildWorld1 = function (THREE, scene) {
     x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle";
     x.font = "900 52px 'Arial Black', Impact, sans-serif";
     x.fillText("TNT", 64, 68);
-    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4;
+    _tntTexCache = t;
+    return t;
   }
 
   // TNT crate — vibrant red cube, instant death on contact

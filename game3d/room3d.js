@@ -5,7 +5,7 @@
    ============================================================ */
 
 window.WARP_LEVELS = [
-  { id:"argentina", name:"Argentina", mode:"Endless Temple Run",
+  { id:"argentina", name:"Argentina", mode:"Endless Pampas Run",
     color:0xf2b705, glow:0xffd24a, accent:0xc75b39, angle: Math.PI * 0.25, boss:false },
   { id:"rome", name:"Rome", mode:"City Traffic Dash",
     color:0xe4d2a4, glow:0xff5a3c, accent:0xb3261e, angle: Math.PI * 1.75, boss:false },

@@ -92,11 +92,21 @@
     <div class="stat"><div class="v" id="speed">0</div><div class="l">km/h</div></div>
   </div>
 
-  <div class="best"><span>Best</span><b id="best">0 m</b></div>
+  <div class="bests">
+    <div class="best"><span>Best</span><b id="best">0 m</b></div>
+    <div class="best"><span>Score Best</span><b id="score-best">0</b></div>
+  </div>
 
   <div class="controls">
     <div class="row"><span class="key">A</span><span class="key">D</span> / <span class="key">&larr;</span><span class="key">&rarr;</span> snap lanes</div>
     <div class="row"><span class="key">Space</span> / <span class="key">&uarr;</span> jump</div>
+    <div class="row"><span class="key">R</span> retry</div>
+  </div>
+
+  <div class="touch-btns" id="touch-btns">
+    <button class="tbtn" id="tbtn-l" type="button">&#8592;</button>
+    <button class="tbtn tbtn-j" id="tbtn-j" type="button">JUMP</button>
+    <button class="tbtn" id="tbtn-r" type="button">&#8594;</button>
   </div>
 
   <div class="pop" id="pop"></div>
@@ -125,10 +135,12 @@
         <div class="rb"><div class="rv" id="over-dist">0 m</div><div class="rl">Distance</div></div>
         <div class="rb"><div class="rv" id="over-score">0</div><div class="rl">Points</div></div>
         <div class="rb"><div class="rv g" id="over-mango">0</div><div class="rl">Mangos</div></div>
-        <div class="rb"><div class="rv" id="over-best">0 m</div><div class="rl">Best</div></div>
+        <div class="rb"><div class="rv" id="over-best">0 m</div><div class="rl">Dist Best</div></div>
+        <div class="rb"><div class="rv" id="over-score-best">0</div><div class="rl">Score Best</div></div>
       </div>
       <button class="cta" id="retry-btn" type="button">Run Again &#8250;</button>
       <button class="cta home" id="home-btn" type="button">&#8249; Return to Warp Room</button>
+      <p style="color:#ffe1a6;font-size:12px;margin:10px 0 0;font-weight:700">Press <b style="color:#fff">R</b> or <b style="color:#fff">Enter</b> to retry</p>
     </div>
   </div>
 
@@ -140,7 +152,8 @@
       <div class="band sky"></div>
     </div>
     <div class="cl-text">LEVEL CLEARED!</div>
-    <div class="cl-sub">&#161;Vamos! Returning to the Warp Room&hellip;</div>
+    <div class="cl-sub">&#161;Vamos! Argentina cleared!</div>
+    <button class="cta cleared-cta" id="cleared-btn" type="button">&#8249; Warp Room</button>
   </div>
 </div>
 

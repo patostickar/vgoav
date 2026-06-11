@@ -75,15 +75,15 @@ window.createWarpRoom = function (THREE, env) {
 
   /* ---- input ---- */
   const keys = {};
-  window.addEventListener("keydown", (e) => {
+  function _onKeyDown(e) {
     if (!active) return;
     keys[e.key.toLowerCase()] = true;
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) e.preventDefault();
     if (e.key === "Enter") tryWarp();
     if (e.key.toLowerCase() === "v") toggleView();
     if (e.key.toLowerCase() === "b") toggleBlueprint();
-  });
-  window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+  }
+  function _onKeyUp(e) { keys[e.key.toLowerCase()] = false; }
 
   /* ---- HUD ---- */
   const hudName = document.getElementById("hud-name");
@@ -143,20 +143,10 @@ window.createWarpRoom = function (THREE, env) {
       env.enterLevel("argentina");
       return;
     }
-    // rome / denmark have no scene yet: simulate the clear (placeholder behavior)
+    // rome / denmark not yet implemented
     warping = true;
-    flash.style.setProperty("--c", "#" + L.glow.toString(16).padStart(6, "0"));
-    flash.classList.add("on");
-    toast("WARPING TO " + L.name.toUpperCase());
-    setTimeout(() => {
-      if (!cleared.includes(L.id)) {
-        env.progress.add(L.id);
-        refresh();
-        if (bossUnlocked()) { refs.unlockBoss(); toast("SEAL BROKEN!"); }
-      }
-      flash.classList.remove("on");
-      warping = false;
-    }, 900);
+    toast(L.name.toUpperCase() + " — COMING SOON");
+    setTimeout(() => { warping = false; }, 900);
   }
 
   let lockShakeT = 0;
@@ -247,6 +237,8 @@ window.createWarpRoom = function (THREE, env) {
   /* ---- enter / exit (state manager hooks) ---- */
   function enter() {
     active = true;
+    window.addEventListener("keydown", _onKeyDown);
+    window.addEventListener("keyup", _onKeyUp);
     // respawn at the center of the room (just off the dais), facing the camera
     car.x = 0; car.z = 6; car.y = 0; car.h = Math.PI; car.speed = 0; car.vy = 0; car.grounded = true;
     Object.keys(keys).forEach((k) => (keys[k] = false));
@@ -256,6 +248,8 @@ window.createWarpRoom = function (THREE, env) {
   }
   function exit() {
     active = false;
+    window.removeEventListener("keydown", _onKeyDown);
+    window.removeEventListener("keyup", _onKeyUp);
     hudBanner.classList.remove("show");
     Object.keys(keys).forEach((k) => (keys[k] = false));
   }

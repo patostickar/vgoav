@@ -20,7 +20,7 @@ window.createArgentinaRun = function (THREE, env) {
   scene.add(new THREE.AmbientLight(0xfff2d8, 0.35));
   const sun = new THREE.DirectionalLight(0xfff1cf, 1.15);
   sun.position.set(-14, 26, 10); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -16; sun.shadow.camera.right = 16;
   sun.shadow.camera.top = 18; sun.shadow.camera.bottom = -18;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 70; sun.shadow.bias = -0.0004;
@@ -61,6 +61,7 @@ window.createArgentinaRun = function (THREE, env) {
   const elMango = document.getElementById("mango-n");
   const elSpeed = document.getElementById("speed");
   const elBest = document.getElementById("best");
+  const elScoreBest = document.getElementById("score-best");
   const startCard = document.getElementById("start");
   const overCard = document.getElementById("over");
   const overEy = document.getElementById("over-ey");
@@ -69,13 +70,63 @@ window.createArgentinaRun = function (THREE, env) {
   const overMango = document.getElementById("over-mango");
   const overScore = document.getElementById("over-score");
   const overBest = document.getElementById("over-best");
+  const overScoreBest = document.getElementById("over-score-best");
   const clearedBanner = document.getElementById("cleared");
+  const clearedBtn = document.getElementById("cleared-btn");
   const flash = document.getElementById("flash");
   const popEl = document.getElementById("pop");
 
   const BESTKEY = "arg_run_best_v1";
+  const SCOREKEY = "arg_run_score_v1";
   let best = 0; try { best = parseInt(localStorage.getItem(BESTKEY) || "0", 10) || 0; } catch (e) {}
+  let scoreBest = 0; try { scoreBest = parseInt(localStorage.getItem(SCOREKEY) || "0", 10) || 0; } catch (e) {}
   elBest.textContent = best + " m";
+  elScoreBest.textContent = scoreBest;
+
+  /* ---- procedural audio ---- */
+  const audio = (function () {
+    let ctx = null;
+    function ctx_() {
+      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+      if (ctx.state === "suspended") ctx.resume();
+      return ctx;
+    }
+    function osc(freq, endFreq, dur, vol, type) {
+      const c = ctx_(); if (!c) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type || "sine";
+      o.frequency.setValueAtTime(freq, c.currentTime);
+      if (endFreq !== freq) o.frequency.exponentialRampToValueAtTime(endFreq, c.currentTime + dur * 0.88);
+      g.gain.setValueAtTime(vol, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(); o.stop(c.currentTime + dur);
+    }
+    function noiseB(dur, vol, hpFreq) {
+      const c = ctx_(); if (!c) return;
+      const buf = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource(), g = c.createGain();
+      src.buffer = buf;
+      g.gain.setValueAtTime(vol, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+      if (hpFreq) { const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = hpFreq; src.connect(hp); hp.connect(g); }
+      else src.connect(g);
+      g.connect(c.destination);
+      src.start(); src.stop(c.currentTime + dur);
+    }
+    return {
+      jump()   { osc(220, 520, 0.13, 0.22); },
+      land()   { osc(100, 44, 0.13, 0.28); noiseB(0.06, 0.12, 180); },
+      mango()  { osc(900, 1340, 0.1, 0.18); },
+      smash()  { osc(140, 55, 0.18, 0.3); noiseB(0.12, 0.22, 160); },
+      tnt()    { osc(55, 28, 0.44, 0.5); noiseB(0.36, 0.4, 40); },
+      aku()    { osc(440, 880, 0.15, 0.18, "triangle"); setTimeout(() => osc(660, 1100, 0.12, 0.14, "triangle"), 140); },
+      shield() { osc(330, 660, 0.18, 0.2, "triangle"); noiseB(0.08, 0.1, 400); },
+      cleared() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => osc(f, f, 0.3, 0.22, "square"), i * 130)); },
+    };
+  })();
 
   /* ---- run state ---- */
   const BASE_SPEED = 26, MAX_SPEED = 50, G = 60;
@@ -90,6 +141,9 @@ window.createArgentinaRun = function (THREE, env) {
   let speed = BASE_SPEED, distance = 0, mangoCount = 0, score = 0, akuPoints = 0;
   let distSinceSpawn = 0, nextGap = 13, prevOpen = [0, 1, 2];
   let lean = 0, hopTilt = 0, shake = 0, deadT = 0, clearT = 0;
+  let combo = 0, comboTimer = 0;
+  const COMBO_WINDOW = 1.5;
+  let _clearReturnTimer = 0;
 
   /* hovering Aku Aku shield masks trailing the vespa */
   const akuMasks = [W.makeAkuMask(), W.makeAkuMask()];
@@ -113,6 +167,7 @@ window.createArgentinaRun = function (THREE, env) {
     speed = BASE_SPEED; distance = 0; mangoCount = 0; score = 0; akuPoints = 0;
     distSinceSpawn = 0; nextGap = 16; prevOpen = [0, 1, 2];
     lean = 0; hopTilt = 0; shake = 0; deadT = 0; clearT = 0;
+    combo = 0; comboTimer = 0;
     vespa.rotation.set(0, 0, 0); VR.tilt.rotation.set(0, 0, 0); VR.tilt.scale.set(1, 1, 1);
     updateHUD();
   }
@@ -131,7 +186,7 @@ window.createArgentinaRun = function (THREE, env) {
   }
   function jump() {
     if (state !== "run") return;
-    if (car.grounded) { car.vy = JUMP; car.grounded = false; }
+    if (car.grounded) { car.vy = JUMP; car.grounded = false; audio.jump(); }
   }
   function startRun() {
     if (state === "run") return;
@@ -139,7 +194,8 @@ window.createArgentinaRun = function (THREE, env) {
     startCard.classList.add("hide"); startCard.classList.remove("show");
     overCard.classList.remove("show");
   }
-  window.addEventListener("keydown", (e) => {
+
+  function _onKeyDown(e) {
     if (!active) return;
     const k = e.key.toLowerCase();
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
@@ -153,17 +209,17 @@ window.createArgentinaRun = function (THREE, env) {
     if (k === "a" || k === "arrowleft") moveLane(1);
     else if (k === "d" || k === "arrowright") moveLane(-1);
     else if (k === " " || k === "w" || k === "arrowup") jump();
-  });
+  }
 
   // pointer / touch fallback: tap left|right third to switch, tap center to jump, swipe up to jump
   let tStart = null;
-  env.dom.addEventListener("pointerdown", (e) => {
+  function _onPointerDown(e) {
     if (!active) return;
     if (state === "ready") { startRun(); return; }
     if (state === "dead" || state === "cleared") return;
     tStart = { x: e.clientX, y: e.clientY, t: performance.now() };
-  });
-  env.dom.addEventListener("pointerup", (e) => {
+  }
+  function _onPointerUp(e) {
     if (!active) return;
     if (!tStart || state !== "run") { tStart = null; return; }
     const dx = e.clientX - tStart.x, dy = e.clientY - tStart.y;
@@ -174,13 +230,19 @@ window.createArgentinaRun = function (THREE, env) {
     } else if (dx > 30) moveLane(-1);
     else if (dx < -30) moveLane(1);
     tStart = null;
-  });
+  }
+
+  // on-screen touch buttons
+  document.getElementById("tbtn-l").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (active && state === "run") moveLane(1); });
+  document.getElementById("tbtn-j").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (active && state === "run") jump(); });
+  document.getElementById("tbtn-r").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (active && state === "run") moveLane(-1); });
 
   /* card buttons */
   document.getElementById("start-btn").addEventListener("click", () => { if (active) startRun(); });
   document.getElementById("retry-btn").addEventListener("click", () => { if (active && state === "dead") startRun(); });
   document.getElementById("home-btn").addEventListener("click", () => { if (active) env.exitToMenu(false); });
   document.getElementById("start-home-btn").addEventListener("click", () => { if (active) env.exitToMenu(false); });
+  clearedBtn.addEventListener("click", () => { if (active && state === "cleared") { clearTimeout(_clearReturnTimer); env.exitToMenu(true); } });
 
   /* ---- spawning ---- */
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -264,21 +326,28 @@ window.createArgentinaRun = function (THREE, env) {
     cratePool.release(o.group);
     mangoCount += 1; // crates drop a wumpa-style bonus
     shake = Math.max(shake, 0.18);
-    popText("SMASH! +25", "#ffd24a");
-    addScore(25);
+    comboTimer = COMBO_WINDOW; combo++;
+    const mult = Math.min(combo, 4), pts = 25 * mult;
+    popText(mult > 1 ? "SMASH! \xD7" + mult + " +" + pts : "SMASH! +25", "#ffd24a");
+    addScore(pts);
+    audio.smash();
   }
   function smashBasic(o) {
     debris(o, 8);
     basicPool.release(o.group);
     shake = Math.max(shake, 0.15);
-    popText("+10", "#ffd24a");
-    addScore(10);
+    comboTimer = COMBO_WINDOW; combo++;
+    const mult = Math.min(combo, 4), pts = 10 * mult;
+    popText(mult > 1 ? "\xD7" + mult + " +" + pts : "+10", "#ffd24a");
+    addScore(pts);
+    audio.smash();
   }
   function collectAku(o) {
     debris(o, 6);
     akuPool.release(o.group);
     if (akuPoints < AKU_MAX) akuPoints += 1;
     popText("AKU AKU!", "#7fe0ff");
+    audio.aku();
   }
   // a deadly hit (cactus or TNT): the shield absorbs it, otherwise crash
   function deadlyHit(o) {
@@ -288,6 +357,7 @@ window.createArgentinaRun = function (THREE, env) {
       POOLS[o.type].release(o.group);
       shake = Math.max(shake, 0.3);
       popText("SHIELDED!", "#7fe0ff");
+      audio.shield();
       return true; // survived — obstacle destroyed
     }
     crash(o.type);
@@ -302,30 +372,33 @@ window.createArgentinaRun = function (THREE, env) {
 
   function crash(cause) {
     if (state !== "run") return;
-    state = "dead"; deadT = 0;
+    state = "dead"; deadT = 0; combo = 0; comboTimer = 0;
     flash.style.setProperty("--c", "#ff3b2e");
     flash.classList.add("on"); setTimeout(() => flash.classList.remove("on"), 220);
     shake = 0.6; car.vy = 9;
     distance = Math.floor(distance);
     if (distance > best) { best = distance; try { localStorage.setItem(BESTKEY, String(best)); } catch (e) {} }
-    // cartoonish TNT-specific game over
-    if (cause === "tnt") { overEy.textContent = "KA-BOOM!"; overTitle.textContent = "GO HOME!"; }
+    if (score > scoreBest) { scoreBest = score; try { localStorage.setItem(SCOREKEY, String(scoreBest)); } catch (e) {} elScoreBest.textContent = scoreBest; }
+    if (cause === "tnt") { audio.tnt(); overEy.textContent = "KA-BOOM!"; overTitle.textContent = "GO HOME!"; }
     else { overEy.textContent = "Wiped Out!"; overTitle.textContent = "Run Over"; }
     overDist.textContent = distance + " m";
     overMango.textContent = mangoCount;
     overScore.textContent = score;
     overBest.textContent = best + " m";
+    overScoreBest.textContent = scoreBest;
     elBest.textContent = best + " m";
     setTimeout(() => { if (state === "dead") overCard.classList.add("show"); }, 480);
   }
 
   function levelCleared() {
-    state = "cleared"; clearT = 0;
+    state = "cleared"; clearT = 0; combo = 0; comboTimer = 0;
     distance = Math.floor(distance);
     if (distance > best) { best = distance; try { localStorage.setItem(BESTKEY, String(best)); } catch (e) {} }
+    if (score > scoreBest) { scoreBest = score; try { localStorage.setItem(SCOREKEY, String(scoreBest)); } catch (e) {} elScoreBest.textContent = scoreBest; }
+    audio.cleared();
     clearedBanner.classList.add("show");
-    // celebrate, then hand back to the Warp Room with the level marked cleared
-    setTimeout(() => { if (active) env.exitToMenu(true); }, 2800);
+    // auto-dismiss after 7 s as fallback; player can also click the button
+    _clearReturnTimer = setTimeout(() => { if (active) env.exitToMenu(true); }, 7000);
   }
 
   /* ---- camera ---- */
@@ -341,9 +414,10 @@ window.createArgentinaRun = function (THREE, env) {
       distSinceSpawn += speed * dt;
       if (distSinceSpawn >= nextGap) {
         distSinceSpawn = 0;
-        nextGap = 11 + Math.random() * 6 - Math.min(4, speed * 0.06);
+        nextGap = Math.max(10, 11 + Math.random() * 6 - Math.min(4, speed * 0.06));
         spawnRow();
       }
+      if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) combo = 0; }
       updateHUD();
     }
     if (state === "cleared") clearT += dt;
@@ -357,7 +431,7 @@ window.createArgentinaRun = function (THREE, env) {
     if (!car.grounded || car.y > 0) {
       const g = car.vy > 0 ? G_RISE : G_FALL;
       car.vy -= g * dt; car.y += car.vy * dt;
-      if (car.y <= 0 && state !== "dead") { car.y = 0; car.vy = 0; if (!car.grounded) hopTilt = 0.42; car.grounded = true; }
+      if (car.y <= 0 && state !== "dead") { car.y = 0; car.vy = 0; if (!car.grounded) { hopTilt = 0.42; audio.land(); } car.grounded = true; }
     }
 
     /* place vespa */
@@ -388,8 +462,9 @@ window.createArgentinaRun = function (THREE, env) {
       // obstacles
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const o = obstacles[i]; o.group.position.z -= move;
-        // collision check at the player plane (only while racing)
-        if (state === "run" && !o.hit && o.group.position.z <= 0.7 && o.group.position.z > -1.4 && o.lane === lane) {
+        // collision: window grows with speed so fast obstacles can't tunnel through in one frame
+        const hitFront = 0.7 + speed * (1 / 55);
+        if (state === "run" && !o.hit && o.group.position.z <= hitFront && o.group.position.z > -1.4 && o.lane === lane) {
           o.hit = true;
           if (o.type === "cactus" || o.type === "tnt") {
             // jumpable with a clean apex; otherwise deadly unless shielded
@@ -420,7 +495,7 @@ window.createArgentinaRun = function (THREE, env) {
         if (state === "run" && !m.got && m.group.position.z <= 0.9 && m.group.position.z > -1.2 && m.lane === lane
           && Math.abs(car.y + 1.4 - m.group.position.y) < 1.5) {
           m.got = true; mangoCount += 1; popText("MANGO +5", "#ffb01e");
-          addScore(5);
+          addScore(5); audio.mango();
           mangoPool.release(m.group); mangos.splice(i, 1); continue;
         }
         if (m.group.position.z < BEHIND) { mangoPool.release(m.group); mangos.splice(i, 1); }
@@ -455,6 +530,9 @@ window.createArgentinaRun = function (THREE, env) {
   /* ---- enter / exit (state manager hooks) ---- */
   function enter() {
     active = true;
+    window.addEventListener("keydown", _onKeyDown);
+    env.dom.addEventListener("pointerdown", _onPointerDown);
+    env.dom.addEventListener("pointerup", _onPointerUp);
     reset();
     state = "ready";
     camPos.set(0, 5.4, -9.2); camLook.set(0, 1.4, 6);
@@ -462,9 +540,14 @@ window.createArgentinaRun = function (THREE, env) {
     overCard.classList.remove("show");
     clearedBanner.classList.remove("show");
     elBest.textContent = best + " m";
+    elScoreBest.textContent = scoreBest;
   }
   function exit() {
     active = false;
+    window.removeEventListener("keydown", _onKeyDown);
+    env.dom.removeEventListener("pointerdown", _onPointerDown);
+    env.dom.removeEventListener("pointerup", _onPointerUp);
+    clearTimeout(_clearReturnTimer);
     startCard.classList.remove("show"); startCard.classList.add("hide");
     overCard.classList.remove("show");
     clearedBanner.classList.remove("show");
