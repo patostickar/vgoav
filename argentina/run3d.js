@@ -27,17 +27,25 @@ window.createArgentinaRun = function (THREE, env) {
   scene.add(sun);
 
   /* ---- world + rider ---- */
+  // roadGroup contains all road-space objects; shifting its X creates road curves.
+  const roadGroup = new THREE.Group();
+  scene.add(roadGroup);
+
   const W = window.buildWorld1(THREE, scene);
   const LANE = W.laneX, FAR = W.FAR, BEHIND = W.BEHIND, SPAN = W.SPAN;
+  // Re-parent the world root from scene into roadGroup so it curves with everything else.
+  scene.remove(W.root);
+  roadGroup.add(W.root);
+
   const vespa = window.buildVespaRun(THREE);
-  scene.add(vespa);
+  roadGroup.add(vespa);
   const VR = vespa.userData.refs;
 
   /* ---- pools ---- */
   function makePool(factory) {
     const free = [];
     return {
-      get() { let o = free.pop(); if (!o) { o = factory(); scene.add(o); } o.visible = true; return o; },
+      get() { let o = free.pop(); if (!o) { o = factory(); roadGroup.add(o); } o.visible = true; return o; },
       release(o) { o.visible = false; o.position.set(0, -60, BEHIND - 40); free.push(o); },
     };
   }
@@ -62,6 +70,9 @@ window.createArgentinaRun = function (THREE, env) {
   const elSpeed = document.getElementById("speed");
   const elBest = document.getElementById("best");
   const elScoreBest = document.getElementById("score-best");
+  const elGoalFill = document.getElementById("goal-fill");
+  const elGoalPts = document.getElementById("goal-pts");
+  const elGoalWrap = document.getElementById("goal-wrap");
   const startCard = document.getElementById("start");
   const overCard = document.getElementById("over");
   const overEy = document.getElementById("over-ey");
@@ -145,9 +156,16 @@ window.createArgentinaRun = function (THREE, env) {
   const COMBO_WINDOW = 1.5;
   let _clearReturnTimer = 0;
 
+  /* ---- road curve ---- */
+  const CURVE_MAX = 4.5, CURVE_SCALE = 0.035;
+  let curveX = 0, curvature = 0;
+  function getCurvature(d) {
+    return Math.sin(d * 0.014) * 0.65 + Math.sin(d * 0.031) * 0.35;
+  }
+
   /* hovering Aku Aku shield masks trailing the vespa */
   const akuMasks = [W.makeAkuMask(), W.makeAkuMask()];
-  akuMasks.forEach((m) => { m.visible = false; scene.add(m); });
+  akuMasks.forEach((m) => { m.visible = false; roadGroup.add(m); });
   function updateAkuMasks(t) {
     akuMasks.forEach((m, i) => {
       m.visible = active && state !== "dead" && i < akuPoints;
@@ -169,6 +187,8 @@ window.createArgentinaRun = function (THREE, env) {
     lean = 0; hopTilt = 0; shake = 0; deadT = 0; clearT = 0;
     combo = 0; comboTimer = 0;
     vespa.rotation.set(0, 0, 0); VR.tilt.rotation.set(0, 0, 0); VR.tilt.scale.set(1, 1, 1);
+    curveX = 0; curvature = 0; roadGroup.position.x = 0;
+    elGoalFill.style.width = "0%"; elGoalPts.textContent = "0"; elGoalWrap.classList.remove("near-win");
     updateHUD();
   }
   function updateHUD() {
@@ -176,6 +196,11 @@ window.createArgentinaRun = function (THREE, env) {
     elMango.textContent = mangoCount;
     elSpeed.textContent = Math.round(speed * 2);
     elScore.textContent = score;
+    const pct = Math.min(100, (score / WIN_SCORE) * 100);
+    elGoalFill.style.width = pct + "%";
+    elGoalPts.textContent = score;
+    if (pct >= 80) elGoalWrap.classList.add("near-win");
+    else elGoalWrap.classList.remove("near-win");
   }
 
   /* ---- input ---- */
@@ -305,8 +330,15 @@ window.createArgentinaRun = function (THREE, env) {
   }
 
   /* ---- scoring / win ---- */
+  const MILESTONES = [
+    { pts: 100, text: "100 PTS!", color: "#fff" },
+    { pts: 250, text: "HALFWAY!", color: "#ffd24a" },
+    { pts: 400, text: "ALMOST THERE!", color: "#27b34a" },
+  ];
   function addScore(n) {
+    const prev = score;
     score += n;
+    MILESTONES.forEach((m) => { if (prev < m.pts && score >= m.pts) popText(m.text, m.color); });
     if (state === "run" && score >= WIN_SCORE) levelCleared();
   }
 
@@ -418,6 +450,10 @@ window.createArgentinaRun = function (THREE, env) {
         spawnRow();
       }
       if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) combo = 0; }
+      // road curve: accumulate lateral drift based on a double-sine curvature function
+      curvature = getCurvature(distance);
+      curveX = Math.max(-CURVE_MAX, Math.min(CURVE_MAX, curveX + curvature * speed * CURVE_SCALE * dt));
+      roadGroup.position.x = curveX;
       updateHUD();
     }
     if (state === "cleared") clearT += dt;
@@ -437,7 +473,7 @@ window.createArgentinaRun = function (THREE, env) {
     /* place vespa */
     vespa.position.set(car.x, car.y, 0);
     hopTilt *= 0.84;
-    VR.tilt.rotation.z = -lean;
+    VR.tilt.rotation.z = -lean - curvature * 0.1;
     VR.tilt.rotation.x = hopTilt + (car.grounded ? 0 : -car.vy * 0.012);
     const sq = Math.max(0, hopTilt);
     VR.tilt.scale.set(1 + sq * 0.4, 1 - sq * 0.5, 1 + sq * 0.4);
@@ -517,12 +553,14 @@ window.createArgentinaRun = function (THREE, env) {
     /* pop text fade */
     if (popT > 0) { popT -= dt; if (popT <= 0) popEl.classList.remove("show"); }
 
-    /* camera (chase, with shake) */
+    /* camera (chase, with shake) — world-space X = roadGroup offset + local car.x */
     shake *= 0.86;
     const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
-    const want = new THREE.Vector3(car.x * 0.5 + sx, 5.4 + sy, -9.2);
+    const worldCarX = curveX + car.x;
+    const want = new THREE.Vector3(worldCarX * 0.5 + sx, 5.4 + sy, -9.2);
     camPos.lerp(want, 0.12);
-    camLook.lerp(new THREE.Vector3(car.x * 0.6, 1.5 + Math.min(car.y, 3) * 0.3, 7), 0.15);
+    camLook.lerp(new THREE.Vector3(worldCarX * 0.6, 1.5 + Math.min(car.y, 3) * 0.3, 7), 0.15);
+    camera.up.set(-curvature * 0.09, 1, 0).normalize();
     camera.position.copy(camPos);
     camera.lookAt(camLook);
   }
@@ -535,6 +573,7 @@ window.createArgentinaRun = function (THREE, env) {
     env.dom.addEventListener("pointerup", _onPointerUp);
     reset();
     state = "ready";
+    camera.up.set(0, 1, 0);
     camPos.set(0, 5.4, -9.2); camLook.set(0, 1.4, 6);
     startCard.classList.remove("hide"); startCard.classList.add("show");
     overCard.classList.remove("show");
