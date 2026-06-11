@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warp Room — Loop World Tour (3D Hub)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="loading" id="loading">ENTERING THE WARP ROOM…<small>drag-free 3D — give it a second to build</small></div>
+
+<div id="app"></div>
+
+<div class="hud">
+  <div class="title"><b>Warp Room</b><span>Loop World Tour · 3D Hub</span></div>
+
+  <div class="prog"><b id="prog-count">0 / 3</b><span>regions cleared</span></div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="banner" id="hud-banner">
+    <div class="nm" id="hud-name">Argentina</div>
+    <div class="md" id="hud-mode">Endless Temple Run</div>
+    <div class="pr" id="hud-prompt">Press <b>ENTER</b> to warp</div>
+  </div>
+
+  <div class="controls">
+    <div class="row"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> / arrows — drive</div>
+    <div class="row"><span class="key">Space</span> jump &nbsp; <span class="key">Enter</span> warp</div>
+    <div class="row"><span class="key">V</span> camera &nbsp; <span class="key">B</span> blueprint</div>
+  </div>
+
+  <div class="btns">
+    <button class="btn" id="view-toggle">Top View (V)</button>
+    <button class="btn" id="bp-toggle">Scene Blueprint (B)</button>
+  </div>
+
+  <div class="blueprint" id="blueprint">
+    <h3>Scene Blueprint</h3>
+    <p>A playable Crash-Warped-style hub: one circular stone room, four portal levels selected by physically driving onto pressure pads.</p>
+
+    <h4>Room architecture</h4>
+    <ul>
+      <li>Circular arena, <span class="mono">R = 16u</span> wall, <span class="mono">H = 11u</span>, 12 chunky pilasters + capstones.</li>
+      <li>Tiered central <b>dais</b> (R 3.2u) with a glowing core — also a soft collision island.</li>
+      <li>Low-poly flat-shaded geometry, saturated stone palette, fog + starfield for warped-space sky.</li>
+    </ul>
+
+    <h4>Portals &amp; pads (4× at corners)</h4>
+    <ul>
+      <li>Portal arches set into the wall at <span class="mono">45° / 315° / 135° / 225°</span>, facing the center.</li>
+      <li>Glowing <b>pressure pad</b> R 2u on the floor at <span class="mono">radius 9.2u</span> in front of each portal; chevrons point inward.</li>
+      <li>Drive onto a pad → it depresses + lights up, portal flares, banner shows the level.</li>
+    </ul>
+    <div class="leg"><span class="sw" style="background:#ffd24a"></span> Argentina — Temple Run</div>
+    <div class="leg"><span class="sw" style="background:#ff5a3c"></span> Rome — Traffic Dash</div>
+    <div class="leg"><span class="sw" style="background:#00dcff"></span> Denmark — Fjord Hop</div>
+    <div class="leg"><span class="sw" style="background:#e0331f"></span> Sardegna — BOSS (sealed)</div>
+
+    <h4>Asset blocking — Sardegna</h4>
+    <ul>
+      <li>Portal opening barricaded by <b>3 wooden planks</b> + a diagonal brace (iron nails).</li>
+      <li>Two crossed <b>iron chains</b> meeting at a <b>giant stylized iron padlock</b> (body, shackle, keyhole, rivets).</li>
+      <li>Clearing the other 3 regions triggers the <b>unlock</b>: boards + lock break away and fall.</li>
+    </ul>
+
+    <h4>Camera rig (third-person)</h4>
+    <ul>
+      <li>Chase cam: <span class="mono">11u behind</span> + <span class="mono">6.8u up</span>, position &amp; target lerp-smoothed each frame.</li>
+      <li>FOV 55°, looks at the rider + 1.8u. Press <b>V</b> for a top-down architectural view.</li>
+    </ul>
+  </div>
+
+  <div class="flash" id="flash"></div>
+</div>
+
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="vespa3d.js"></script>
+<script src="room3d.js"></script>
+<script src="app3d.js"></script>
+</body>
+</html>
